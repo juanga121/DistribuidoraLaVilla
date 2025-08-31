@@ -1,0 +1,6 @@
+@DistribuidoraLaVilla.Api_HostAddress = http://localhost:5105
+
+GET {{DistribuidoraLaVilla.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

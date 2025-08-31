@@ -1,0 +1,54 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36408.4
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistribuidoraLaVilla.Api", "DistribuidoraLaVilla.Api\DistribuidoraLaVilla.Api.csproj", "{288C05DC-72CA-4BFC-AEF7-21C69CDA65A0}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Application", "Application", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Infrastructure", "Infrastructure", "{0EF16AE1-1B8D-4C6D-8568-1B6E52D3FB4A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Domain", "Domain", "{A50A6084-BA5F-4E1D-9DB5-A384DB322DF0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistribuidoraLaVilla.Domain", "DistribuidoraLaVilla.Domain\DistribuidoraLaVilla.Domain.csproj", "{5456C83C-59A5-4A51-94D4-6D19F32202C6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistribuidoraLaVilla.Application", "DistribuidoraLaVilla.Application\DistribuidoraLaVilla.Application.csproj", "{681D3428-B81D-4121-BE29-0C68B7909828}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DistribuidoraLaVilla.Infrastructure", "DistribuidoraLaVilla.Infrastructure\DistribuidoraLaVilla.Infrastructure.csproj", "{BCD144D8-67F9-4CA3-AEAA-D298B69FD9BB}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{288C05DC-72CA-4BFC-AEF7-21C69CDA65A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{288C05DC-72CA-4BFC-AEF7-21C69CDA65A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{288C05DC-72CA-4BFC-AEF7-21C69CDA65A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{288C05DC-72CA-4BFC-AEF7-21C69CDA65A0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5456C83C-59A5-4A51-94D4-6D19F32202C6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5456C83C-59A5-4A51-94D4-6D19F32202C6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5456C83C-59A5-4A51-94D4-6D19F32202C6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5456C83C-59A5-4A51-94D4-6D19F32202C6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{681D3428-B81D-4121-BE29-0C68B7909828}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{681D3428-B81D-4121-BE29-0C68B7909828}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{681D3428-B81D-4121-BE29-0C68B7909828}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{681D3428-B81D-4121-BE29-0C68B7909828}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BCD144D8-67F9-4CA3-AEAA-D298B69FD9BB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BCD144D8-67F9-4CA3-AEAA-D298B69FD9BB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BCD144D8-67F9-4CA3-AEAA-D298B69FD9BB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BCD144D8-67F9-4CA3-AEAA-D298B69FD9BB}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5456C83C-59A5-4A51-94D4-6D19F32202C6} = {A50A6084-BA5F-4E1D-9DB5-A384DB322DF0}
+		{681D3428-B81D-4121-BE29-0C68B7909828} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{BCD144D8-67F9-4CA3-AEAA-D298B69FD9BB} = {0EF16AE1-1B8D-4C6D-8568-1B6E52D3FB4A}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {3D0FCB0D-D903-4028-A029-C54B5AC98240}
+	EndGlobalSection
+EndGlobal
