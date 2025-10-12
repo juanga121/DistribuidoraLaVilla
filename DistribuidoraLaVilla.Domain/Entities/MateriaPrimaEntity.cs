@@ -21,5 +21,14 @@ namespace DistribuidoraLaVilla.Domain.Entities
 
         [Column("id_categoria_materia_prima")]
         public int IdCategoria { get; set; }
+
+        [Column("fecha_creacion")]
+        public DateTime FechaCreacion { get; set; }
+
+        [Column("fecha_actualizacion")]
+        public DateTime FechaActualizacion { get; set; }
+
+        [Column("estado")]
+        public int Estado { get; set; }
     }
 }

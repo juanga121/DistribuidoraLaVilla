@@ -57,9 +57,11 @@ namespace DistribuidoraLaVilla.Infrastructure.Repositories
             else
                 return _dbSet.Where(predicate).OrderByDescending(orderBy);
         }
-        public Task UpdateAsync(T entity)
+        public async Task UpdateAsync(T entity)
         {
-            throw new NotImplementedException();
+            _dbSet.Attach(entity);
+            _efContext.Entry(entity).State = EntityState.Modified;
+            await _efContext.SaveChangesAsync();
         }
     }
 }

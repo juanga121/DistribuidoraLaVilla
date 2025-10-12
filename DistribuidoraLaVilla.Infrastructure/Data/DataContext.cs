@@ -10,12 +10,13 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
 {
     public class DataContext(DbContextOptions<DataContext> options) : DbContext(options)
     {
-        public DbSet<MarcaEntity> Marcas { get; set; }
+        public DbSet<MarcasEntity> Marcas { get; set; }
         public DbSet<UnidadMedidaEntity> UnidadMedida { get; set; }
         public DbSet<TipoMovimientoMateriaPrimaEntity> TiposMovimientoMateriaPrima { get; set; }
         public DbSet<MovimientosMateriaPrimaEntity> MovimientosMateriaPrima { get; set; }
         public DbSet<LotesMateriaPrimaEntity> LotesMateriaPrima { get; set; }
         public DbSet<MateriaPrimaEntity> MateriaPrima { get; set; }
         public DbSet<CategoriaMateriaPrimaEntity> CategoriasMateriaPrima { get; set; }
+        public DbSet<ProveedoresEntity> Proveedores { get; set; }
     }
 }

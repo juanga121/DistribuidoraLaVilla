@@ -1,5 +1,4 @@
-﻿using DistribuidoraLaVilla.Domain.Enums;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -34,7 +33,7 @@ namespace DistribuidoraLaVilla.Domain.Entities
         public Guid IdUsuario { get; set; }
 
         [Column("observacion")]
-        public string? Observacion { get; set; }
+        public required string Observacion { get; set; }
 
     }
 }

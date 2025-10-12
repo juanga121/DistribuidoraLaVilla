@@ -10,4 +10,10 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\DistribuidoraLaVilla.Application\DistribuidoraLaVilla.Application.csproj" />
+    <ProjectReference Include="..\DistribuidoraLaVilla.Domain\DistribuidoraLaVilla.Domain.csproj" />
+    <ProjectReference Include="..\DistribuidoraLaVilla.Infrastructure\DistribuidoraLaVilla.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>

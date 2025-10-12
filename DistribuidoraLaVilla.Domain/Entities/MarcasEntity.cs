@@ -8,15 +8,27 @@ using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Domain.Entities
 {
-    [Table("marcas")]
-    public class MarcaEntity
+    public class MarcasEntity
     {
         [Key]
         [Column("id_marca")]
         public int IdMarca { get; set; }
+
         [Column("nombre")]
+        [StringLength(50)]
         public string? Nombre { get; set; }
+
         [Column("descripcion")]
+        [StringLength(255)]
         public string? Descripcion { get; set; }
+
+        [Column("estado")]
+        public int? Estado { get; set; }
+
+        [Column("fecha_creacion")]
+        public DateTime FechaCreacion { get; set; }
+
+        [Column("fecha_actualizacion")]
+        public DateTime? FechaActualizacion { get; set; }
     }
 }

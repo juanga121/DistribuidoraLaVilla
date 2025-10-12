@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Domain.Entities
 {
-    [Table("categoria_materia_prima")]
+    [Table("categorias_materia_prima")]
     public class CategoriaMateriaPrimaEntity
     {
         [Key]
@@ -21,5 +21,14 @@ namespace DistribuidoraLaVilla.Domain.Entities
 
         [Column("descripcion")]
         public string? Descripcion { get; set; }
+
+        [Column("fecha_creacion")]
+        public DateTime? FechaCreacion { get; set; }
+
+        [Column("fecha_actualizacion")]
+        public DateTime? FechaActualizacion { get; set; }
+
+        [Column("estado")]
+        public int Estado { get; set; }
     }
 }
