@@ -38,7 +38,7 @@ namespace DistribuidoraLaVilla.Api.Controllers
             return Ok("Estado de la marca actualizado con exito");
         }
         [HttpPut]
-        [Route("ActualizarMarca/{idMarca:int}")]
+        [Route("ActualizarMarca/{idMarca}")]
         public async Task<IActionResult> ActualizarMarca(int idMarca, [FromBody] MarcasDTO marcasDTO)
         {
             await _marcasService.ActualizarMarca(idMarca, marcasDTO);

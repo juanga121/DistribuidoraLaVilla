@@ -15,7 +15,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         public async Task<IActionResult> CrearCategoria(CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO)
         {
             await _categoriasMateriaPrimaService.CrearCategoriaAsync(categoriasMateriaPrimaDTO);
-            return Ok("Categoria agregada con exito");
+            return Ok();
         }
 
         [HttpGet]
@@ -33,7 +33,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             try
             {
                 await _categoriasMateriaPrimaService.ActualizarEstadoCategorias(categoriasMateriaPrimaActualizarEstadoDTO);
-                return Ok("Estado de la categoria actualizado con exito");
+                return Ok();
             }
             catch (Exception ex)
             {
@@ -45,15 +45,8 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("ActualizarCategorias/{id}")]
         public async Task<IActionResult> ActualizarCategorias(int id, [FromBody]CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO)
         {
-            try
-            {
-                await _categoriasMateriaPrimaService.ActualizarCategorias(id, categoriasMateriaPrimaDTO);
-                return Ok("Categoria actualizada con exito");
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(ex.Message);
-            }
+            await _categoriasMateriaPrimaService.ActualizarCategorias(id, categoriasMateriaPrimaDTO);
+            return Ok();
         }
 
         [HttpGet]
@@ -62,6 +55,22 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         {
             var categoria = await _categoriasMateriaPrimaService.ObtenerPorIdCategoria(idCategoria);
             return Ok(categoria);
+        }
+
+        [HttpGet]
+        [Route("ObtenerCategoriasDisponibles")]
+        public async Task<IActionResult> ObtenerCategoriasDisponibles()
+        {
+            var categoriasDisponibles = await _categoriasMateriaPrimaService.ObtenerCategoriasDisponibles();
+            return Ok(categoriasDisponibles);
+        }
+
+        [HttpDelete]
+        [Route("EliminarCategoria/{idCategoria}")]
+        public async Task<IActionResult> EliminarCategoria(int idCategoria)
+        {
+            await _categoriasMateriaPrimaService.EliminarCategoriaAsync(idCategoria);
+            return Ok();
         }
     }
 }

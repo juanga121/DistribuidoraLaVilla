@@ -14,6 +14,8 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<MateriaPrimaService>();
             services.AddScoped<ProveedoresService>();
             services.AddScoped<MarcasService>();
+            services.AddScoped<LotesMateriaPrimaService>();
+            services.AddScoped<UnidadMedidaService>();
             return services;
         }
     }

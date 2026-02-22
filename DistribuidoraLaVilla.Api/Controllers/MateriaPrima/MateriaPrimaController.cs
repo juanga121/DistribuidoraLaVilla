@@ -15,7 +15,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         public async Task<IActionResult> CrearMateriaPrima([FromBody] MateriaPrimaDTO materiaPrimaDTO)
         {
             await _materiaPrimaService.CrearMateriaPrimaAsync(materiaPrimaDTO);
-            return Ok("Materia Prima agregada con exito");
+            return Ok();
         }
 
         [HttpGet]
@@ -39,7 +39,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         public async Task<IActionResult> ActualizarEstadoMateriaPrima([FromBody] MateriaPrimaActualizarEstadoDTO materiaPrimaActualizarEstadoDTO)
         {
             await _materiaPrimaService.ActualizarEstadoMateriaPrima(materiaPrimaActualizarEstadoDTO);
-            return Ok("Estado de la materia prima actualizado con exito");
+            return Ok();
         }
 
         [HttpPut]
@@ -47,8 +47,8 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         public async Task<IActionResult> ActualizarMateriaPrima(int idMateriaPrima, [FromBody] MateriaPrimaDTO materiaPrimaDTO)
         {
             await _materiaPrimaService.ActualizarMateriaPrima(idMateriaPrima, materiaPrimaDTO);
-            return Ok("Materia Prima actualizada con exito");
-        }
+            return Ok();
+        }      
 
         [HttpGet]
         [Route("ObtenerMateriasPrimasDisponibles")]
@@ -56,6 +56,14 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         {
             var materiaPrima = await _materiaPrimaService.ObtenerMateriaPrimaDisponible();
             return Ok(materiaPrima);
+        }
+
+        [HttpDelete]
+        [Route("EliminarMateriaPrima/{idMateriaPrima}")]
+        public async Task<IActionResult> EliminarMateriaPrima(int idMateriaPrima)
+        {
+            await _materiaPrimaService.EliminarMateriaPrimaAsync(idMateriaPrima);
+            return Ok();
         }
     }
 }

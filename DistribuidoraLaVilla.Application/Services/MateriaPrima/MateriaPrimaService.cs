@@ -72,5 +72,19 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             var materiaPrimaDisponible = materiaPrima.Where(item => item.Estado == 1).ToList();
             return materiaPrimaDisponible;
         }
+
+        // New: delete materia prima by id using generic repository
+        public async Task EliminarMateriaPrimaAsync(int idMateriaPrima)
+        {
+            var existente = await _materiaPrima.FindByIdAsync(idMateriaPrima);
+            if (existente != null)
+            {
+                await _materiaPrima.DeleteAsync(idMateriaPrima);
+            }
+            else
+            {
+                throw new Exception("La materia prima no existe");
+            }
+        }
     }
 }

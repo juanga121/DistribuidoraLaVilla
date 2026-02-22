@@ -60,10 +60,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 
                 await _categoriasMateriaPrima.UpdateAsync(categoriaMateriaPrima);
             }
-            else
-            {
-                throw new Exception("Error al actualizar las categorias");
-            }
         }
 
         public async Task<CategoriaMateriaPrimaEntity> ObtenerPorIdCategoria(int idCategoria)
@@ -76,6 +72,26 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             else
             {
                 throw new Exception("No se encontro la categoria de materia prima");
+            }
+        }
+
+        public async Task<List<CategoriaMateriaPrimaEntity>> ObtenerCategoriasDisponibles()
+        {
+            var resultado = await _categoriasMateriaPrima.GetAllAsync();
+            return [.. resultado.Where(c => c.Estado == 1)];
+        }
+
+        // New: delete category by id using generic repository
+        public async Task EliminarCategoriaAsync(int idCategoria)
+        {
+            var existente = await _categoriasMateriaPrima.FindByIdAsync(idCategoria);
+            if (existente != null)
+            {
+                await _categoriasMateriaPrima.DeleteAsync(idCategoria);
+            }
+            else
+            {
+                throw new Exception("La categoria de materia prima no existe");
             }
         }
     }
