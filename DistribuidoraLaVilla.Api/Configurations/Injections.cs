@@ -1,6 +1,8 @@
 ﻿using DistribuidoraLaVilla.Application.Repositories;
 using DistribuidoraLaVilla.Application.Services;
 using DistribuidoraLaVilla.Application.Services.MateriaPrima;
+using DistribuidoraLaVilla.Application.Services.Productos;
+using DistribuidoraLaVilla.Domain.Entities.Productos;
 using DistribuidoraLaVilla.Infrastructure.Repositories;
 
 namespace DistribuidoraLaVilla.Api.Configurations
@@ -16,6 +18,9 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<MarcasService>();
             services.AddScoped<LotesMateriaPrimaService>();
             services.AddScoped<UnidadMedidaService>();
+            services.AddScoped<CategoriasProductosService>();
+            services.AddScoped<ProductosService>();
+            services.AddScoped<LotesProductosService>();
             return services;
         }
     }
