@@ -1,4 +1,4 @@
-﻿using DistribuidoraLaVilla.Application.Repositories;
+using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Domain.Entities;
 using System;
 using System.Collections.Generic;

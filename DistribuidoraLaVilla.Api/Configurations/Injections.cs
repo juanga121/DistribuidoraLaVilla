@@ -1,4 +1,4 @@
-﻿using DistribuidoraLaVilla.Application.Repositories;
+﻿using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Services;
 using DistribuidoraLaVilla.Application.Services.MateriaPrima;
 using DistribuidoraLaVilla.Application.Services.Productos;
@@ -17,10 +17,16 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<ProveedoresService>();
             services.AddScoped<MarcasService>();
             services.AddScoped<LotesMateriaPrimaService>();
+            services.AddScoped<MovimientosMateriaPrimaService>();
+            services.AddScoped<StockMateriaPrimaService>();
             services.AddScoped<UnidadMedidaService>();
             services.AddScoped<CategoriasProductosService>();
             services.AddScoped<ProductosService>();
             services.AddScoped<LotesProductosService>();
+            services.AddScoped<MovimientosProductosService>();
+            services.AddScoped<RecetaProductoService>();
+            services.AddScoped<ProduccionService>();
+            services.AddScoped<UsuariosService>();
             return services;
         }
     }

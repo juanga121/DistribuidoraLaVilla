@@ -1,5 +1,7 @@
-﻿using DistribuidoraLaVilla.Application.Services.MateriaPrima;
+﻿using System.Security.Claims;
+using DistribuidoraLaVilla.Application.Services.MateriaPrima;
 using DistribuidoraLaVilla.Domain.DTOS;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
@@ -14,8 +16,19 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("CrearLoteMateriaPrima")]
         public async Task<IActionResult> CrearLoteMateriaPrima([FromBody] LotesMateriaPrimaDTO lotesMateriaPrimaDTO)
         {
-            await _lotesMateriaPrimaService.CrearLoteMateriaPrimaAsync(lotesMateriaPrimaDTO);
-            return Ok();
+            try
+            {
+                await _lotesMateriaPrimaService.CrearLoteMateriaPrimaAsync(lotesMateriaPrimaDTO);
+                return Ok(new { mensaje = "Lote de materia prima creado exitosamente" });
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { errores = ex.Errors.Select(e => e.ErrorMessage) });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al crear el lote", detalle = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -46,8 +59,19 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("ActualizarLoteMateriaPrima/{idLoteMateriaPrima}")]
         public async Task<IActionResult> ActualizarLoteMateriaPrima(int idLoteMateriaPrima, [FromBody] LotesMateriaPrimaDTO lotesMateriaPrimaDTO)
         {
-            await _lotesMateriaPrimaService.ActualizarLoteMateriaPrima(idLoteMateriaPrima, lotesMateriaPrimaDTO);
-            return Ok();
+            try
+            {
+                await _lotesMateriaPrimaService.ActualizarLoteMateriaPrima(idLoteMateriaPrima, lotesMateriaPrimaDTO);
+                return Ok(new { mensaje = "Lote de materia prima actualizado exitosamente" });
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { errores = ex.Errors.Select(e => e.ErrorMessage) });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al actualizar el lote", detalle = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -62,7 +86,11 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("EliminarLoteMateriaPrima/{idLote}")]
         public async Task<IActionResult> EliminarLote(int idLote)
         {
-            await _lotesMateriaPrimaService.EliminarLoteMateriaPrimaAsync(idLote);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim))
+                return Unauthorized(new { mensaje = "Usuario no autenticado" });
+
+            await _lotesMateriaPrimaService.EliminarLoteMateriaPrimaAsync(idLote, Guid.Parse(userIdClaim));
             return Ok();
         }
     }

@@ -1,6 +1,10 @@
-using DistribuidoraLaVilla.Application.Repositories;
+using DistribuidoraLaVilla.Domain.Interfaces;
+using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Domain.DTOS;
+using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
+using DistribuidoraLaVilla.Domain.Enums;
+using FluentValidation;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,12 +12,24 @@ using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Application.Services.Productos
 {
-    public class LotesProductosService(IGenericRepository<LotesProductosEntity, int> lotesProductosRepository)
+    public class LotesProductosService(
+        IGenericRepository<LotesProductosEntity, int> lotesProductosRepository,
+        IGenericRepository<MovimientosProductosEntity, int> movimientosProductosRepository)
     {
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesProductosRepository = lotesProductosRepository;
+        private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosProductosRepository = movimientosProductosRepository;
 
         public async Task CrearLoteProductoAsync(LotesProductosDTO lotesProductosDTO)
         {
+            // Validación
+            var validator = new LotesProductosDTOValidator();
+            var validationResult = await validator.ValidateAsync(lotesProductosDTO);
+
+            if (!validationResult.IsValid)
+            {
+                throw new ValidationException(validationResult.Errors);
+            }
+
             var precioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
 
             LotesProductosEntity entity = new()
@@ -29,9 +45,26 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 PrecioKilo = lotesProductosDTO.PrecioKilo,
                 PrecioTotal = precioTotal,
                 IdMarca = lotesProductosDTO.IdMarca,
+                CantidadInicial = lotesProductosDTO.PesoTotal,
+                CantidadDisponible = lotesProductosDTO.PesoTotal,
                 Estado = 1
             };
             await _lotesProductosRepository.CreateAsync(entity);
+
+            // Auto-generar movimiento de entrada
+            var movimiento = new MovimientosProductosEntity
+            {
+                IdLoteProducto = entity.Id,
+                TipoMovimiento = (int)TipoMovimientoProducto.Entrada,
+                FechaMovimiento = DateTime.Now,
+                Cantidad = lotesProductosDTO.PesoTotal,
+                TotalMovimiento = precioTotal,
+                IdUnidadMedida = lotesProductosDTO.IdUnidadMedida,
+                IdUsuario = lotesProductosDTO.IdUsuario,
+                Observacion = $"Ingreso de lote - {lotesProductosDTO.CantidadUnidades} unidades, {lotesProductosDTO.PesoTotal} kg",
+                Estado = 1
+            };
+            await _movimientosProductosRepository.CreateAsync(movimiento);
         }
 
         public async Task<List<LotesProductosEntity>> ObtenerLotesProductosAsync()
@@ -50,8 +83,27 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             var lote = await _lotesProductosRepository.FindByIdAsync(actualizarEstadoDTO.Id);
             if (lote != null)
             {
+                var estadoAnterior = lote.Estado;
                 lote.Estado = actualizarEstadoDTO.EstadoNuevo;
                 await _lotesProductosRepository.UpdateAsync(lote);
+
+                // Si se da de baja (estado = 0), auto-generar movimiento de vencimiento
+                if (actualizarEstadoDTO.EstadoNuevo == 0 && estadoAnterior != 0)
+                {
+                    var movimiento = new MovimientosProductosEntity
+                    {
+                        IdLoteProducto = lote.Id,
+                        TipoMovimiento = (int)TipoMovimientoProducto.Vencimiento,
+                        FechaMovimiento = DateTime.Now,
+                        Cantidad = lote.CantidadDisponible,
+                        TotalMovimiento = lote.PrecioTotal,
+                        IdUnidadMedida = lote.IdUnidadMedida,
+                        IdUsuario = actualizarEstadoDTO.IdUsuario ?? Guid.Empty,
+                        Observacion = $"Baja de lote por vencimiento - {lote.CantidadDisponible} unidades",
+                        Estado = 1
+                    };
+                    await _movimientosProductosRepository.CreateAsync(movimiento);
+                }
             }
             else
             {
@@ -61,9 +113,21 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
         public async Task ActualizarLoteProducto(int id, LotesProductosDTO lotesProductosDTO)
         {
+            // Validación
+            var validator = new LotesProductosDTOValidator();
+            var validationResult = await validator.ValidateAsync(lotesProductosDTO);
+
+            if (!validationResult.IsValid)
+            {
+                throw new ValidationException(validationResult.Errors);
+            }
+
             var lote = await _lotesProductosRepository.FindByIdAsync(id);
             if (lote != null)
             {
+                // Calculamos la diferencia para ajustar CantidadDisponible
+                var diferenciaPeso = lotesProductosDTO.PesoTotal - lote.PesoTotal;
+
                 lote.IdProducto = lotesProductosDTO.IdProducto;
                 lote.IdProveedor = lotesProductosDTO.IdProveedor;
                 lote.FechaEntrada = DateTime.Now;
@@ -75,6 +139,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 lote.PrecioKilo = lotesProductosDTO.PrecioKilo;
                 lote.PrecioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
                 lote.IdMarca = lotesProductosDTO.IdMarca;
+                lote.CantidadInicial = lotesProductosDTO.PesoTotal;
+                lote.CantidadDisponible += diferenciaPeso;
                 await _lotesProductosRepository.UpdateAsync(lote);
             }
         }
@@ -85,11 +151,26 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             return [.. lotes.Where(l => l.Estado == 1)];
         }
 
-        public async Task EliminarLoteProductoAsync(int idLote)
+        public async Task EliminarLoteProductoAsync(int idLote, Guid idUsuario)
         {
             var existente = await _lotesProductosRepository.FindByIdAsync(idLote);
             if (existente != null)
             {
+                // Auto-generar movimiento de ajuste antes de eliminar
+                var movimiento = new MovimientosProductosEntity
+                {
+                    IdLoteProducto = existente.Id,
+                    TipoMovimiento = (int)TipoMovimientoProducto.Ajuste,
+                    FechaMovimiento = DateTime.Now,
+                    Cantidad = existente.CantidadDisponible,
+                    TotalMovimiento = existente.PrecioTotal,
+                    IdUnidadMedida = existente.IdUnidadMedida,
+                    IdUsuario = idUsuario,
+                    Observacion = $"Eliminación de lote - {existente.CantidadDisponible} kg",
+                    Estado = 1
+                };
+                await _movimientosProductosRepository.CreateAsync(movimiento);
+
                 await _lotesProductosRepository.DeleteAsync(idLote);
             }
             else

@@ -43,6 +43,12 @@ namespace DistribuidoraLaVilla.Domain.Entities
         [Column("costo_total")]
         public decimal CostoTotal { get; set; }
 
+        [Column("cantidad_inicial")]
+        public decimal CantidadInicial { get; set; }
+
+        [Column("cantidad_disponible")]
+        public decimal CantidadDisponible { get; set; }
+
         [Column("estado")]
         public int Estado { get; set; }
     }

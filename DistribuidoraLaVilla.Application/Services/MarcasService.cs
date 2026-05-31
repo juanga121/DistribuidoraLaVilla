@@ -1,4 +1,4 @@
-﻿using DistribuidoraLaVilla.Application.Repositories;
+using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.Entities;
 using System;
@@ -70,6 +70,19 @@ namespace DistribuidoraLaVilla.Application.Services
             var marcas = await _marcasRepository.GetAllAsync();
             var marcasDisponibles = marcas.Where(item => item.Estado == 1).ToList();
             return marcasDisponibles;
+        }
+
+        public async Task EliminarMarcaAsync(int idMarca)
+        {
+            var existente = await _marcasRepository.FindByIdAsync(idMarca);
+            if (existente != null)
+            {
+                await _marcasRepository.DeleteAsync(idMarca);
+            }
+            else
+            {
+                throw new Exception("La marca no existe");
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using DistribuidoraLaVilla.Application.Repositories;
+﻿using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using System;

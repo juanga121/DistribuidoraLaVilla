@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using DistribuidoraLaVilla.Application.Services.Productos;
 using DistribuidoraLaVilla.Domain.DTOS;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DistribuidoraLaVilla.Api.Controllers.Productos
@@ -14,8 +16,19 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("CrearLoteProducto")]
         public async Task<IActionResult> CrearLoteProducto([FromBody] LotesProductosDTO lotesProductosDTO)
         {
-            await _lotesProductosService.CrearLoteProductoAsync(lotesProductosDTO);
-            return Ok();
+            try
+            {
+                await _lotesProductosService.CrearLoteProductoAsync(lotesProductosDTO);
+                return Ok(new { mensaje = "Lote de producto creado exitosamente" });
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { errores = ex.Errors.Select(e => e.ErrorMessage) });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al crear el lote", detalle = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -46,8 +59,19 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("ActualizarLoteProducto/{idLoteProducto}")]
         public async Task<IActionResult> ActualizarLoteProducto(int idLoteProducto, [FromBody] LotesProductosDTO lotesProductosDTO)
         {
-            await _lotesProductosService.ActualizarLoteProducto(idLoteProducto, lotesProductosDTO);
-            return Ok();
+            try
+            {
+                await _lotesProductosService.ActualizarLoteProducto(idLoteProducto, lotesProductosDTO);
+                return Ok(new { mensaje = "Lote de producto actualizado exitosamente" });
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { errores = ex.Errors.Select(e => e.ErrorMessage) });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al actualizar el lote", detalle = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -62,7 +86,11 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("EliminarLoteProducto/{idLote}")]
         public async Task<IActionResult> EliminarLoteProducto(int idLote)
         {
-            await _lotesProductosService.EliminarLoteProductoAsync(idLote);
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdClaim))
+                return Unauthorized(new { mensaje = "Usuario no autenticado" });
+
+            await _lotesProductosService.EliminarLoteProductoAsync(idLote, Guid.Parse(userIdClaim));
             return Ok();
         }
     }

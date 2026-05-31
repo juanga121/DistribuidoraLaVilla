@@ -57,5 +57,13 @@ namespace DistribuidoraLaVilla.Api.Controllers
             var proveedores = await _proveedoresService.ObtnenerProveedoresDisponibles();
             return Ok(proveedores);
         }
+
+        [HttpDelete]
+        [Route("EliminarProveedor/{idProveedor}")]
+        public async Task<IActionResult> EliminarProveedor(Guid idProveedor)
+        {
+            await _proveedoresService.EliminarProveedorAsync(idProveedor);
+            return Ok("Proveedor eliminado con exito");
+        }
     }
 }

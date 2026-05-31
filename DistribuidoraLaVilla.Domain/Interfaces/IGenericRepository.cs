@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Linq.Expressions;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace DistribuidoraLaVilla.Application.Repositories
+namespace DistribuidoraLaVilla.Domain.Interfaces
 {
     public interface IGenericRepository<T, TKey> where TKey : notnull
     {

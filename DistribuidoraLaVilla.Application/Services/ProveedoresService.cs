@@ -1,4 +1,4 @@
-﻿using DistribuidoraLaVilla.Application.Repositories;
+using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.Entities;
 using System;
@@ -77,6 +77,19 @@ namespace DistribuidoraLaVilla.Application.Services
             var proveedores = await _proveedoresRepository.GetAllAsync();
             var proveedoresDisponibles = proveedores.Where(item => item.Estado == 1).ToList();
             return proveedoresDisponibles;
+        }
+
+        public async Task EliminarProveedorAsync(Guid idProveedor)
+        {
+            var existente = await _proveedoresRepository.FindByIdAsync(idProveedor);
+            if (existente != null)
+            {
+                await _proveedoresRepository.DeleteAsync(idProveedor);
+            }
+            else
+            {
+                throw new Exception("El proveedor no existe");
+            }
         }
     }
 }

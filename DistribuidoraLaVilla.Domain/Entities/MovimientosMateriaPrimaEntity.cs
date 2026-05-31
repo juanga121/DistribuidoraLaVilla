@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Domain.Entities
 {
+    [Table("movimientos_materia_prima")]
     public class MovimientosMateriaPrimaEntity
     {
         [Key]
@@ -33,7 +34,6 @@ namespace DistribuidoraLaVilla.Domain.Entities
         public Guid IdUsuario { get; set; }
 
         [Column("observacion")]
-        public required string Observacion { get; set; }
-
+        public string? Observacion { get; set; }
     }
 }

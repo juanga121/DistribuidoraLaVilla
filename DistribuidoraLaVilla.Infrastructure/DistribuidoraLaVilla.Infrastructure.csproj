@@ -12,7 +12,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\DistribuidoraLaVilla.Application\DistribuidoraLaVilla.Application.csproj" />
     <ProjectReference Include="..\DistribuidoraLaVilla.Domain\DistribuidoraLaVilla.Domain.csproj" />
   </ItemGroup>
 

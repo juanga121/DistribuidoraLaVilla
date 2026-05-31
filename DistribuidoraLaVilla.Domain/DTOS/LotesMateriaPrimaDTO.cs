@@ -11,5 +11,6 @@ namespace DistribuidoraLaVilla.Domain.DTOS
         public decimal Cantidad { get; set; }
         public int IdUnidadMedida { get; set; }
         public decimal CostoUnitario { get; set; }
+        public Guid IdUsuario { get; set; }
     }
 }

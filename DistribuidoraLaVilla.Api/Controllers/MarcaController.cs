@@ -52,5 +52,13 @@ namespace DistribuidoraLaVilla.Api.Controllers
             var resultado = await _marcasService.ObtenerMarcasDisponibles();
             return Ok(resultado);
         }
+
+        [HttpDelete]
+        [Route("EliminarMarca/{idMarca}")]
+        public async Task<IActionResult> EliminarMarca(int idMarca)
+        {
+            await _marcasService.EliminarMarcaAsync(idMarca);
+            return Ok("Marca eliminada con exito");
+        }
     }
 }

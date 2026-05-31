@@ -10,4 +10,13 @@
     <ProjectReference Include="..\DistribuidoraLaVilla.Domain\DistribuidoraLaVilla.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.2.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.8" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.4.0" />
+    <PackageReference Include="FluentValidation" Version="12.1.1" />
+  </ItemGroup>
+
+  <!-- Infrastructure reference removed to break circular dependency -->
+
 </Project>

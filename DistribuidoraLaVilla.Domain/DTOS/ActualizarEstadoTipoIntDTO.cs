@@ -10,5 +10,6 @@ namespace DistribuidoraLaVilla.Domain.DTOS
     {
         public int Id { get; set; }
         public int EstadoNuevo { get; set; }
+        public Guid? IdUsuario { get; set; }
     }
 }

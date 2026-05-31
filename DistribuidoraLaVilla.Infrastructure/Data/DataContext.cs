@@ -22,5 +22,9 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
         public DbSet<CategoriasProductosEntity> CategoriasProductos { get; set; }
         public DbSet<ProductosEntity> Productos { get; set; }
         public DbSet<LotesProductosEntity> LotesProductos { get; set; }
+        public DbSet<MovimientosProductosEntity> MovimientosProductos { get; set; }
+        public DbSet<RecetaProductoEntity> RecetasProducto { get; set; }
+        public DbSet<OrdenProduccionEntity> OrdenesProduccion { get; set; }
+        public DbSet<UsuariosEntity> Usuarios { get; set; }
     }
 }
