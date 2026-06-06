@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using DistribuidoraLaVilla.Domain.Entities;
+using DistribuidoraLaVilla.Domain.Entities.Facturacion;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
 
 namespace DistribuidoraLaVilla.Infrastructure.Data
@@ -26,5 +22,23 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
         public DbSet<RecetaProductoEntity> RecetasProducto { get; set; }
         public DbSet<OrdenProduccionEntity> OrdenesProduccion { get; set; }
         public DbSet<UsuariosEntity> Usuarios { get; set; }
+        public DbSet<ClientesEntity> Clientes { get; set; }
+
+        // ── Facturación ──
+        public DbSet<FacturaEntity> Facturas { get; set; }
+        public DbSet<DetalleFacturaEntity> DetallesFactura { get; set; }
+        public DbSet<CuentasCobrarEntity> CuentasCobrar { get; set; }
+        public DbSet<PagoCuentaEntity> PagosCuenta { get; set; }
+        public DbSet<EstadoFacturaEntity> EstadosFactura { get; set; }
+        public DbSet<TipoFacturaEntity> TiposFactura { get; set; }
+
+        // ── Movimientos generales (productos terminados) ──
+        public DbSet<MovimientoEntity> Movimientos { get; set; }
+
+        // ── Auditoría ──
+        public DbSet<AuditoriaEntity> Auditoria { get; set; }
+
+        // ── Lookup compartidos ──
+        public DbSet<EstadoEntity> Estados { get; set; }
     }
 }

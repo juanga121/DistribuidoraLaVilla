@@ -1,8 +1,15 @@
-﻿using DistribuidoraLaVilla.Domain.Interfaces;
+﻿using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Application.Services;
+using DistribuidoraLaVilla.Application.Services.Auditoria;
+using DistribuidoraLaVilla.Application.Services.CxC;
+using DistribuidoraLaVilla.Application.Services.Facturacion;
+using DistribuidoraLaVilla.Application.Services.Inventario;
 using DistribuidoraLaVilla.Application.Services.MateriaPrima;
 using DistribuidoraLaVilla.Application.Services.Productos;
+using DistribuidoraLaVilla.Application.Services.Reportes;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
+using DistribuidoraLaVilla.Domain.Interfaces;
+using DistribuidoraLaVilla.Infrastructure.Data;
 using DistribuidoraLaVilla.Infrastructure.Repositories;
 
 namespace DistribuidoraLaVilla.Api.Configurations
@@ -27,6 +34,13 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<RecetaProductoService>();
             services.AddScoped<ProduccionService>();
             services.AddScoped<UsuariosService>();
+            services.AddScoped<ClientesService>();
+            services.AddScoped<FacturaService>();
+            services.AddScoped<ICuentasCobrarService, CuentasCobrarService>();
+            services.AddScoped<IInventarioService, InventarioService>();
+            services.AddScoped<IReportesService, ReportesService>();
+            services.AddScoped<IAuditoriaService, AuditoriaService>();
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
             return services;
         }
     }

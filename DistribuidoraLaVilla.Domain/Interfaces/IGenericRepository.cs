@@ -11,6 +11,7 @@ namespace DistribuidoraLaVilla.Domain.Interfaces
         List<T> GetByFilter(Expression<Func<T, bool>> filter);
         IEnumerable<T> GetByFilterOrdered(Expression<Func<T, bool>> predicate,
             Expression<Func<T, object>> orderBy, bool? isDesc = true);
+        IQueryable<T> GetQueryable();
         Task UpdateAsync(T entity);
     }
 }

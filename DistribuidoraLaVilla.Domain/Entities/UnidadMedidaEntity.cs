@@ -18,5 +18,8 @@ namespace DistribuidoraLaVilla.Domain.Entities
         public string? Nombre { get; set; }
         [Column("simbolo")]
         public string? Abreviatura { get; set; }
+
+        [Column("tipo")]
+        public int Tipo { get; set; } = 1;
     }
 }

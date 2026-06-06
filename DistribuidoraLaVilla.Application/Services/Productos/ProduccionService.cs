@@ -1,3 +1,4 @@
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators.Productos;
 using DistribuidoraLaVilla.Domain.DTOS.Productos;
@@ -14,46 +15,46 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 {
     public class ProduccionService
     {
+        private readonly IUnitOfWork _unitOfWork;
+        private readonly IInventarioService _inventarioService;
         private readonly IGenericRepository<OrdenProduccionEntity, int> _ordenRepository;
         private readonly IGenericRepository<RecetaProductoEntity, int> _recetaRepository;
         private readonly IGenericRepository<ProductosEntity, int> _productosRepository;
-        private readonly IGenericRepository<MateriaPrimaEntity, int> _materiaPrimaRepository;
-        private readonly IGenericRepository<LotesMateriaPrimaEntity, int> _lotesMateriaPrimaRepository;
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesProductosRepository;
-        private readonly IGenericRepository<MovimientosMateriaPrimaEntity, int> _movimientosMateriaPrimaRepository;
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosProductosRepository;
         private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository;
         private readonly SolicitudProduccionDTOValidator _validator;
 
         public ProduccionService(
+            IUnitOfWork unitOfWork,
+            IInventarioService inventarioService,
             IGenericRepository<OrdenProduccionEntity, int> ordenRepository,
             IGenericRepository<RecetaProductoEntity, int> recetaRepository,
             IGenericRepository<ProductosEntity, int> productosRepository,
-            IGenericRepository<MateriaPrimaEntity, int> materiaPrimaRepository,
-            IGenericRepository<LotesMateriaPrimaEntity, int> lotesMateriaPrimaRepository,
             IGenericRepository<LotesProductosEntity, int> lotesProductosRepository,
-            IGenericRepository<MovimientosMateriaPrimaEntity, int> movimientosMateriaPrimaRepository,
             IGenericRepository<MovimientosProductosEntity, int> movimientosProductosRepository,
             IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository)
         {
+            _unitOfWork = unitOfWork;
+            _inventarioService = inventarioService;
             _ordenRepository = ordenRepository;
             _recetaRepository = recetaRepository;
             _productosRepository = productosRepository;
-            _materiaPrimaRepository = materiaPrimaRepository;
-            _lotesMateriaPrimaRepository = lotesMateriaPrimaRepository;
             _lotesProductosRepository = lotesProductosRepository;
-            _movimientosMateriaPrimaRepository = movimientosMateriaPrimaRepository;
             _movimientosProductosRepository = movimientosProductosRepository;
             _unidadMedidaRepository = unidadMedidaRepository;
             _validator = new SolicitudProduccionDTOValidator();
         }
 
         /// <summary>
-        /// Procesa una orden de producción completa
-        /// NOTA: En producción real, esto debería usar Unit of Work pattern con transacciones
+        /// Procesa una orden de producción completa.
+        /// Usa transacción para garantizar atomicidad: si algo falla,
+        /// se revierten todos los cambios (stock, movimientos, orden).
         /// </summary>
         public async Task<ResultadoProduccionDTO> ProcesarProduccionAsync(SolicitudProduccionDTO solicitud)
         {
+            await _unitOfWork.BeginTransactionAsync();
+
             try
             {
                 // 1. Validar entrada
@@ -92,38 +93,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     r.IdUnidadMedida
                 }).ToList();
 
-                // 5. Validar stock disponible de cada ingrediente
-                var ingredientesConsumidos = new List<ConsumoIngredienteDTO>();
-
-                foreach (var ingrediente in ingredientesNecesarios)
-                {
-                    var materiaPrima = await _materiaPrimaRepository.FindByIdAsync(ingrediente.IdMateriaPrima);
-                    if (materiaPrima == null)
-                    {
-                        throw new InvalidOperationException(
-                            $"No se encontró la materia prima con ID {ingrediente.IdMateriaPrima}"
-                        );
-                    }
-
-                    // Obtener stock total disponible de esta materia prima
-                    var lotesDisponibles = _lotesMateriaPrimaRepository.GetByFilter(l =>
-                        l.IdMateria == ingrediente.IdMateriaPrima &&
-                        l.Estado == 1 &&
-                        l.CantidadDisponible > 0
-                    ).OrderBy(l => l.FechaVencimiento).ToList();
-
-                    var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
-
-                    if (stockTotal < ingrediente.CantidadTotal)
-                    {
-                        throw new InvalidOperationException(
-                            $"Stock insuficiente de '{materiaPrima.Nombre}'. " +
-                            $"Requerido: {ingrediente.CantidadTotal}, Disponible: {stockTotal}"
-                        );
-                    }
-                }
-
-                // 6. Crear orden de producción
+                // 5. Crear orden de producción
                 var orden = new OrdenProduccionEntity
                 {
                     IdProducto = solicitud.IdProducto,
@@ -137,60 +107,23 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 await _ordenRepository.CreateAsync(orden);
 
-                // 7. Descontar materia prima y crear movimientos de consumo
+                // 6. Consumir materia prima de lotes usando FIFO (servicio compartido)
+                var ingredientesConsumidos = new List<ConsumoIngredienteDTO>();
+
                 foreach (var ingrediente in ingredientesNecesarios)
                 {
-                    var materiaPrima = await _materiaPrimaRepository.FindByIdAsync(ingrediente.IdMateriaPrima);
-                    var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(ingrediente.IdUnidadMedida);
+                    var consumos = await _inventarioService.ConsumirLotesMateriaPrimaAsync(
+                        idMateriaPrima: ingrediente.IdMateriaPrima,
+                        cantidadRequerida: ingrediente.CantidadTotal,
+                        idUnidadMedida: ingrediente.IdUnidadMedida,
+                        idUsuario: solicitud.IdUsuario,
+                        observacion: $"Consumo para producción de {solicitud.CantidadProducir} unidades de {producto.Nombre}"
+                    );
 
-                    var lotesDisponibles = _lotesMateriaPrimaRepository.GetByFilter(l =>
-                        l.IdMateria == ingrediente.IdMateriaPrima &&
-                        l.Estado == 1 &&
-                        l.CantidadDisponible > 0
-                    ).OrderBy(l => l.FechaVencimiento).ToList();
-
-                    decimal cantidadPendiente = ingrediente.CantidadTotal;
-
-                    // Consumir de los lotes ordenados por vencimiento (FIFO)
-                    foreach (var lote in lotesDisponibles)
-                    {
-                        if (cantidadPendiente <= 0) break;
-
-                        decimal cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
-
-                        // Descontar del lote
-                        lote.CantidadDisponible -= cantidadAConsumir;
-                        await _lotesMateriaPrimaRepository.UpdateAsync(lote);
-
-                        // Crear movimiento de consumo
-                        var movimiento = new MovimientosMateriaPrimaEntity
-                        {
-                            IdLoteMateria = lote.Id,
-                            IdTipoMovimiento = (int)TipoMovimientoMateriaPrima.Consumo,
-                            Fecha = DateTime.Now,
-                            Cantidad = cantidadAConsumir,
-                            IdUnidadMedida = ingrediente.IdUnidadMedida,
-                            IdUsuario = solicitud.IdUsuario,
-                            Observacion = $"Consumo para producción de {solicitud.CantidadProducir} unidades de {producto.Nombre}"
-                        };
-
-                        await _movimientosMateriaPrimaRepository.CreateAsync(movimiento);
-
-                        ingredientesConsumidos.Add(new ConsumoIngredienteDTO
-                        {
-                            IdMateriaPrima = ingrediente.IdMateriaPrima,
-                            NombreMateriaPrima = materiaPrima?.Nombre,
-                            CantidadRequerida = ingrediente.CantidadTotal,
-                            CantidadConsumida = cantidadAConsumir,
-                            UnidadMedida = unidadMedida?.Abreviatura,
-                            IdMovimiento = movimiento.Id
-                        });
-
-                        cantidadPendiente -= cantidadAConsumir;
-                    }
+                    ingredientesConsumidos.AddRange(consumos);
                 }
 
-                // 8. Crear lote de producto terminado
+                // 7. Crear lote de producto terminado
                 var nuevoLoteProducto = new LotesProductosEntity
                 {
                     IdProducto = solicitud.IdProducto,
@@ -211,7 +144,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 await _lotesProductosRepository.CreateAsync(nuevoLoteProducto);
 
-                // 9. Crear movimiento de entrada de producto
+                // 8. Crear movimiento de entrada de producto
                 var movimientoEntradaProducto = new MovimientosProductosEntity
                 {
                     IdLoteProducto = nuevoLoteProducto.Id,
@@ -229,14 +162,16 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 await _movimientosProductosRepository.CreateAsync(movimientoEntradaProducto);
 
-                // 10. Actualizar orden como completada
+                // 9. Actualizar orden como completada
                 orden.FechaCompletada = DateTime.Now;
                 orden.IdLoteGenerado = nuevoLoteProducto.Id;
                 orden.Estado = 2; // Completada
                 await _ordenRepository.UpdateAsync(orden);
 
-                // 11. Construir respuesta exitosa
+                // 10. Construir respuesta exitosa
                 var unidadMedidaProducto = await _unidadMedidaRepository.FindByIdAsync(solicitud.IdUnidadMedida);
+
+                await _unitOfWork.CommitAsync();
 
                 return new ResultadoProduccionDTO
                 {
@@ -256,12 +191,18 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             }
             catch (Exception ex)
             {
+                await _unitOfWork.RollbackAsync();
+
                 return new ResultadoProduccionDTO
                 {
                     Exitoso = false,
                     Mensaje = $"Error en la producción: {ex.Message}",
                     IngredientesConsumidos = new List<ConsumoIngredienteDTO>()
                 };
+            }
+            finally
+            {
+                await _unitOfWork.DisposeAsync();
             }
         }
 

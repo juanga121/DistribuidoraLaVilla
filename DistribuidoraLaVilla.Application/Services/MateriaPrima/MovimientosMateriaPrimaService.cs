@@ -1,3 +1,5 @@
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Domain.DTOS;
@@ -13,10 +15,12 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 {
     public class MovimientosMateriaPrimaService(
         IGenericRepository<MovimientosMateriaPrimaEntity, int> movimientosRepository,
-        IGenericRepository<LotesMateriaPrimaEntity, int> lotesRepository)
+        IGenericRepository<LotesMateriaPrimaEntity, int> lotesRepository,
+        IAuditoriaService auditoriaService)
     {
         private readonly IGenericRepository<MovimientosMateriaPrimaEntity, int> _movimientosRepository = movimientosRepository;
         private readonly IGenericRepository<LotesMateriaPrimaEntity, int> _lotesRepository = lotesRepository;
+        private readonly IAuditoriaService _auditoriaService = auditoriaService;
 
         /// <summary>
         /// Crea un nuevo movimiento de materia prima y actualiza el stock del lote
@@ -67,6 +71,20 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             };
 
             await _movimientosRepository.CreateAsync(movimiento);
+
+            try
+            {
+                var detalle = JsonSerializer.Serialize(new
+                {
+                    tipoMovimiento = ObtenerNombreTipoMovimiento(movimiento.IdTipoMovimiento),
+                    cantidad = movimiento.Cantidad,
+                    stockAnterior,
+                    stockNuevo = nuevoStock,
+                    observacion = movimiento.Observacion
+                });
+                await _auditoriaService.RegistrarAsync("MovimientoMP", movimiento.Id.ToString(), "Crear", detalle, movimiento.IdUsuario);
+            }
+            catch { /* fire-and-forget */ }
 
             // 8. RETORNAR respuesta con información del movimiento
             return new MovimientoMateriaPrimaResponseDTO

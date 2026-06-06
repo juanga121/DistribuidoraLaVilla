@@ -44,6 +44,11 @@ namespace DistribuidoraLaVilla.Infrastructure.Repositories
             return await _dbSet.ToListAsync() ??
                 throw new Exception($"{nameof(T)} List Not Found");
         }
+        public IQueryable<T> GetQueryable()
+        {
+            return _dbSet.AsNoTracking().AsQueryable();
+        }
+
         public List<T> GetByFilter(Expression<Func<T, bool>> filter)
         {
             return _dbSet.Where(filter).ToList() ??

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators.Productos;
 using DistribuidoraLaVilla.Domain.DTOS.Productos;
@@ -16,13 +18,16 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosRepository;
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesRepository;
         private readonly CrearMovimientoProductoDTOValidator _validator;
+        private readonly IAuditoriaService _auditoriaService;
 
         public MovimientosProductosService(
             IGenericRepository<MovimientosProductosEntity, int> movimientosRepository,
-            IGenericRepository<LotesProductosEntity, int> lotesRepository)
+            IGenericRepository<LotesProductosEntity, int> lotesRepository,
+            IAuditoriaService auditoriaService)
         {
             _movimientosRepository = movimientosRepository;
             _lotesRepository = lotesRepository;
+            _auditoriaService = auditoriaService;
             _validator = new CrearMovimientoProductoDTOValidator();
         }
 
@@ -93,6 +98,20 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             // 8. Guardar en repositorio (simula transacción)
             await _movimientosRepository.CreateAsync(movimiento);
             await _lotesRepository.UpdateAsync(lote);
+
+            try
+            {
+                var detalle = JsonSerializer.Serialize(new
+                {
+                    tipoMovimiento = ObtenerNombreTipoMovimiento(movimiento.TipoMovimiento),
+                    cantidad = movimiento.Cantidad,
+                    stockAnterior,
+                    stockNuevo = nuevoStock,
+                    observacion = movimiento.Observacion
+                });
+                await _auditoriaService.RegistrarAsync("MovimientoProducto", movimiento.Id.ToString(), "Crear", detalle, dto.IdUsuario);
+            }
+            catch { /* fire-and-forget */ }
 
             // 9. Retornar respuesta con stock anterior y nuevo
             return new RespuestaMovimientoProductoDTO

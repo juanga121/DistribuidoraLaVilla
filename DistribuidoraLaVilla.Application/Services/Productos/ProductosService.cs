@@ -1,3 +1,5 @@
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
@@ -9,21 +11,42 @@ using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Application.Services.Productos
 {
-    public class ProductosService(IGenericRepository<ProductosEntity, int> productos)
+    public class ProductosService(
+        IGenericRepository<ProductosEntity, int> productos,
+        IAuditoriaService auditoriaService)
     {
         private readonly IGenericRepository<ProductosEntity, int> _productos = productos;
+        private readonly IAuditoriaService _auditoriaService = auditoriaService;
 
-        public async Task CrearProductoAsync(ProductoDTO productoDTO)
+        public async Task CrearProductoAsync(ProductoDTO productoDTO, Guid idUsuario)
         {
+            // BR-VP-01: If VentaPorPeso=true, PrecioPorKilo must be > 0
+            if (productoDTO.VentaPorPeso && (productoDTO.PrecioPorKilo == null || productoDTO.PrecioPorKilo <= 0))
+                throw new ArgumentException("El precio por kilo es obligatorio y debe ser mayor a 0 cuando el producto se vende por peso");
+
             ProductosEntity productoEntity = new()
             {
                 Nombre = productoDTO.Nombre,
                 Descripcion = productoDTO.Descripcion,
                 IdCategoria = productoDTO.IdCategoria,
                 PrecioUnitario = productoDTO.PrecioUnitario,
+                VentaPorPeso = productoDTO.VentaPorPeso,
+                PrecioPorKilo = productoDTO.PrecioPorKilo,
                 Estado = 1
             };
             await _productos.CreateAsync(productoEntity);
+
+            try
+            {
+                var detalle = JsonSerializer.Serialize(new
+                {
+                    nombre = productoEntity.Nombre,
+                    precio = productoEntity.PrecioUnitario,
+                    categoria = productoEntity.IdCategoria
+                });
+                await _auditoriaService.RegistrarAsync("Producto", productoEntity.Id.ToString(), "Crear", detalle, idUsuario);
+            }
+            catch { /* fire-and-forget: audit failure must not break the main operation */ }
         }
 
         public async Task<List<ProductosEntity>> ObtenerProductosAsync()
@@ -37,13 +60,25 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             return result;
         }
 
-        public async Task ActualizarEstadoProducto(ProductoActualizarEstadoDTO productoActualizarEstadoDTO)
+        public async Task ActualizarEstadoProducto(ProductoActualizarEstadoDTO productoActualizarEstadoDTO, Guid idUsuario)
         {
             var producto = await _productos.FindByIdAsync(productoActualizarEstadoDTO.Id);
             if (producto != null)
             {
+                var estadoAnterior = producto.Estado;
                 producto.Estado = productoActualizarEstadoDTO.EstadoNuevo;
                 await _productos.UpdateAsync(producto);
+
+                try
+                {
+                    var detalle = JsonSerializer.Serialize(new
+                    {
+                        estadoAnterior,
+                        estadoNuevo = producto.Estado
+                    });
+                    await _auditoriaService.RegistrarAsync("Producto", productoActualizarEstadoDTO.Id.ToString(), "Modificar", detalle, idUsuario);
+                }
+                catch { /* fire-and-forget */ }
             }
             else
             {
@@ -51,16 +86,52 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             }
         }
 
-        public async Task ActualizarProducto(int idProducto, ProductoDTO productoDTO)
+        public async Task ActualizarProducto(int idProducto, ProductoDTO productoDTO, Guid idUsuario)
         {
+            // BR-VP-01: If VentaPorPeso=true, PrecioPorKilo must be > 0
+            if (productoDTO.VentaPorPeso && (productoDTO.PrecioPorKilo == null || productoDTO.PrecioPorKilo <= 0))
+                throw new ArgumentException("El precio por kilo es obligatorio y debe ser mayor a 0 cuando el producto se vende por peso");
+
             var producto = await _productos.FindByIdAsync(idProducto);
             if (producto != null)
             {
+                var precioAnterior = producto.PrecioUnitario;
+                var precioPorKiloAnterior = producto.PrecioPorKilo;
+
                 producto.Nombre = productoDTO.Nombre;
                 producto.Descripcion = productoDTO.Descripcion;
                 producto.IdCategoria = productoDTO.IdCategoria;
                 producto.PrecioUnitario = productoDTO.PrecioUnitario;
+                producto.VentaPorPeso = productoDTO.VentaPorPeso;
+                producto.PrecioPorKilo = productoDTO.PrecioPorKilo;
                 await _productos.UpdateAsync(producto);
+
+                try
+                {
+                    // Registrar cambio de precio si corresponde
+                    if (precioAnterior != productoDTO.PrecioUnitario || precioPorKiloAnterior != productoDTO.PrecioPorKilo)
+                    {
+                        var detallePrecio = JsonSerializer.Serialize(new
+                        {
+                            precioAnterior,
+                            precioNuevo = productoDTO.PrecioUnitario,
+                            precioPorKiloAnterior,
+                            precioPorKiloNuevo = productoDTO.PrecioPorKilo
+                        });
+                        await _auditoriaService.RegistrarAsync("Producto", idProducto.ToString(), "CambioPrecio", detallePrecio, idUsuario);
+                    }
+                    else
+                    {
+                        var detalle = JsonSerializer.Serialize(new
+                        {
+                            nombre = productoDTO.Nombre,
+                            descripcion = productoDTO.Descripcion,
+                            categoria = productoDTO.IdCategoria
+                        });
+                        await _auditoriaService.RegistrarAsync("Producto", idProducto.ToString(), "Modificar", detalle, idUsuario);
+                    }
+                }
+                catch { /* fire-and-forget */ }
             }
             else
             {
@@ -75,12 +146,22 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             return productosDisponibles;
         }
 
-        public async Task EliminarProductoAsync(int idProducto)
+        public async Task EliminarProductoAsync(int idProducto, Guid idUsuario)
         {
             var existente = await _productos.FindByIdAsync(idProducto);
             if (existente != null)
             {
                 await _productos.DeleteAsync(idProducto);
+
+                try
+                {
+                    var detalle = JsonSerializer.Serialize(new
+                    {
+                        nombre = existente.Nombre
+                    });
+                    await _auditoriaService.RegistrarAsync("Producto", idProducto.ToString(), "Eliminar", detalle, idUsuario);
+                }
+                catch { /* fire-and-forget */ }
             }
             else
             {

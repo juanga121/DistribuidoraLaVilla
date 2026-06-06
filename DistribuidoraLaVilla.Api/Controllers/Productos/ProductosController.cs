@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using DistribuidoraLaVilla.Application.Services.Productos;
 using DistribuidoraLaVilla.Domain.DTOS;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +15,8 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("CrearProducto")]
         public async Task<IActionResult> CrearProducto([FromBody] ProductoDTO productoDTO)
         {
-            await _productosService.CrearProductoAsync(productoDTO);
+            var idUsuario = GetUserId();
+            await _productosService.CrearProductoAsync(productoDTO, idUsuario);
             return Ok();
         }
 
@@ -38,7 +40,8 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("ActualizarEstadoProducto")]
         public async Task<IActionResult> ActualizarEstadoProducto([FromBody] ProductoActualizarEstadoDTO productoActualizarEstadoDTO)
         {
-            await _productosService.ActualizarEstadoProducto(productoActualizarEstadoDTO);
+            var idUsuario = GetUserId();
+            await _productosService.ActualizarEstadoProducto(productoActualizarEstadoDTO, idUsuario);
             return Ok();
         }
 
@@ -46,7 +49,8 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("ActualizarProducto/{idProducto}")]
         public async Task<IActionResult> ActualizarProducto(int idProducto, [FromBody] ProductoDTO productoDTO)
         {
-            await _productosService.ActualizarProducto(idProducto, productoDTO);
+            var idUsuario = GetUserId();
+            await _productosService.ActualizarProducto(idProducto, productoDTO, idUsuario);
             return Ok();
         }
 
@@ -62,8 +66,22 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("EliminarProducto/{idProducto}")]
         public async Task<IActionResult> EliminarProducto(int idProducto)
         {
-            await _productosService.EliminarProductoAsync(idProducto);
+            var idUsuario = GetUserId();
+            await _productosService.EliminarProductoAsync(idProducto, idUsuario);
             return Ok();
+        }
+
+        /// <summary>
+        /// Extrae el ID del usuario desde el JWT (ClaimTypes.NameIdentifier).
+        /// Si no hay autenticación, retorna Guid.Empty como placeholder.
+        /// </summary>
+        private Guid GetUserId()
+        {
+            var nameIdentifier = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!string.IsNullOrEmpty(nameIdentifier) && Guid.TryParse(nameIdentifier, out var userId))
+                return userId;
+
+            return Guid.Empty;
         }
     }
 }

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Domain.DTOS;
@@ -14,10 +16,12 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 {
     public class LotesProductosService(
         IGenericRepository<LotesProductosEntity, int> lotesProductosRepository,
-        IGenericRepository<MovimientosProductosEntity, int> movimientosProductosRepository)
+        IGenericRepository<MovimientosProductosEntity, int> movimientosProductosRepository,
+        IAuditoriaService auditoriaService)
     {
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesProductosRepository = lotesProductosRepository;
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosProductosRepository = movimientosProductosRepository;
+        private readonly IAuditoriaService _auditoriaService = auditoriaService;
 
         public async Task CrearLoteProductoAsync(LotesProductosDTO lotesProductosDTO)
         {
@@ -50,6 +54,19 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 Estado = 1
             };
             await _lotesProductosRepository.CreateAsync(entity);
+
+            try
+            {
+                var detalle = JsonSerializer.Serialize(new
+                {
+                    idProducto = entity.IdProducto,
+                    cantidadUnidades = entity.CantidadUnidades,
+                    pesoTotal = entity.PesoTotal,
+                    precioTotal
+                });
+                await _auditoriaService.RegistrarAsync("StockProducto", entity.Id.ToString(), "CrearLote", detalle, lotesProductosDTO.IdUsuario);
+            }
+            catch { /* fire-and-forget */ }
 
             // Auto-generar movimiento de entrada
             var movimiento = new MovimientosProductosEntity
@@ -86,6 +103,17 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 var estadoAnterior = lote.Estado;
                 lote.Estado = actualizarEstadoDTO.EstadoNuevo;
                 await _lotesProductosRepository.UpdateAsync(lote);
+
+                try
+                {
+                    var detalle = JsonSerializer.Serialize(new
+                    {
+                        estadoAnterior,
+                        estadoNuevo = lote.Estado
+                    });
+                    await _auditoriaService.RegistrarAsync("StockProducto", lote.Id.ToString(), "CambioEstado", detalle, actualizarEstadoDTO.IdUsuario ?? Guid.Empty);
+                }
+                catch { /* fire-and-forget */ }
 
                 // Si se da de baja (estado = 0), auto-generar movimiento de vencimiento
                 if (actualizarEstadoDTO.EstadoNuevo == 0 && estadoAnterior != 0)
@@ -142,6 +170,18 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 lote.CantidadInicial = lotesProductosDTO.PesoTotal;
                 lote.CantidadDisponible += diferenciaPeso;
                 await _lotesProductosRepository.UpdateAsync(lote);
+
+                try
+                {
+                    var detalle = JsonSerializer.Serialize(new
+                    {
+                        cantidadUnidades = lotesProductosDTO.CantidadUnidades,
+                        pesoTotal = lotesProductosDTO.PesoTotal,
+                        diferenciaPeso
+                    });
+                    await _auditoriaService.RegistrarAsync("StockProducto", id.ToString(), "Modificar", detalle, lotesProductosDTO.IdUsuario);
+                }
+                catch { /* fire-and-forget */ }
             }
         }
 
@@ -172,6 +212,16 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 await _movimientosProductosRepository.CreateAsync(movimiento);
 
                 await _lotesProductosRepository.DeleteAsync(idLote);
+
+                try
+                {
+                    var detalle = JsonSerializer.Serialize(new
+                    {
+                        cantidadDisponible = existente.CantidadDisponible
+                    });
+                    await _auditoriaService.RegistrarAsync("StockProducto", idLote.ToString(), "Eliminar", detalle, idUsuario);
+                }
+                catch { /* fire-and-forget */ }
             }
             else
             {
