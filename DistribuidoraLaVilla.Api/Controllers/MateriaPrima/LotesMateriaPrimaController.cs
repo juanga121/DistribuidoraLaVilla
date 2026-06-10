@@ -40,6 +40,14 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         }
 
         [HttpGet]
+        [Route("ObtenerLotesMateriaPrimaDetalle")]
+        public async Task<IActionResult> ObtenerLotesMateriaPrimaDetalle()
+        {
+            var lotes = await _lotesMateriaPrimaService.ObtenerLotesMateriaPrimaDetalleAsync();
+            return Ok(lotes);
+        }
+
+        [HttpGet]
         [Route("ObtenerLoteMateriaPrimaPorId/{id}")]
         public async Task<IActionResult> ObtenerLoteMateriaPrimaPorId(int id)
         {
@@ -86,12 +94,22 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("EliminarLoteMateriaPrima/{idLote}")]
         public async Task<IActionResult> EliminarLote(int idLote)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdClaim))
-                return Unauthorized(new { mensaje = "Usuario no autenticado" });
+            try
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (string.IsNullOrEmpty(userIdClaim))
+                    return Unauthorized(new { mensaje = "Usuario no autenticado" });
 
-            await _lotesMateriaPrimaService.EliminarLoteMateriaPrimaAsync(idLote, Guid.Parse(userIdClaim));
-            return Ok();
+                if (!Guid.TryParse(userIdClaim, out var userId))
+                    return BadRequest(new { mensaje = "El identificador del usuario es inválido" });
+
+                await _lotesMateriaPrimaService.EliminarLoteMateriaPrimaAsync(idLote, userId);
+                return Ok(new { mensaje = "Lote dado de baja correctamente" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
         }
     }
 }

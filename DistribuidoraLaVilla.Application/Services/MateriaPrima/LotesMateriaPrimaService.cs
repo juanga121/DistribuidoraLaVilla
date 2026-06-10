@@ -8,6 +8,7 @@ using DistribuidoraLaVilla.Domain.Enums;
 using FluentValidation;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
@@ -15,10 +16,18 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
     public class LotesMateriaPrimaService(
         IGenericRepository<LotesMateriaPrimaEntity, int> lotesMateriaPrimaRepository,
         IGenericRepository<MovimientosMateriaPrimaEntity, int> movimientosMateriaPrimaRepository,
+        IGenericRepository<MarcasEntity, int> marcasRepository,
+        IGenericRepository<MateriaPrimaEntity, int> materiaPrimaRepository,
+        IGenericRepository<ProveedoresEntity, Guid> proveedoresRepository,
+        IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository,
         IAuditoriaService auditoriaService)
     {
         private readonly IGenericRepository<LotesMateriaPrimaEntity, int> _lotesMateriaPrimaRepository = lotesMateriaPrimaRepository;
         private readonly IGenericRepository<MovimientosMateriaPrimaEntity, int> _movimientosMateriaPrimaRepository = movimientosMateriaPrimaRepository;
+        private readonly IGenericRepository<MarcasEntity, int> _marcasRepository = marcasRepository;
+        private readonly IGenericRepository<MateriaPrimaEntity, int> _materiaPrimaRepository = materiaPrimaRepository;
+        private readonly IGenericRepository<ProveedoresEntity, Guid> _proveedoresRepository = proveedoresRepository;
+        private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository = unidadMedidaRepository;
         private readonly IAuditoriaService _auditoriaService = auditoriaService;
 
         public async Task CrearLoteMateriaPrimaAsync(LotesMateriaPrimaDTO lotesMateriaPrimaDTO)
@@ -65,7 +74,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             }
             catch { /* fire-and-forget */ }
 
-            // Auto-generar movimiento de entrada
+            // Auto-generar movimiento de entrada: si falla, que el error sea visible
             var movimiento = new MovimientosMateriaPrimaEntity
             {
                 IdLoteMateria = entity.Id,
@@ -84,6 +93,49 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             return await _lotesMateriaPrimaRepository.GetAllAsync();
         }
 
+        public async Task<List<LoteMateriaPrimaDetalleDTO>> ObtenerLotesMateriaPrimaDetalleAsync()
+        {
+            var lotes = (await _lotesMateriaPrimaRepository.GetAllAsync()).Where(l => l.Estado == 1).ToList();
+            var marcas = (await _marcasRepository.GetAllAsync()).ToDictionary(m => m.IdMarca);
+            var materias = (await _materiaPrimaRepository.GetAllAsync()).ToDictionary(m => m.Id);
+            var proveedores = (await _proveedoresRepository.GetAllAsync()).ToDictionary(p => p.IdProveedor);
+            var unidades = (await _unidadMedidaRepository.GetAllAsync()).ToDictionary(u => u.Id);
+
+            return lotes.Select(l => new LoteMateriaPrimaDetalleDTO
+            {
+                Id = l.Id,
+                IdMarca = l.IdMarca,
+                NombreMarca = marcas.ContainsKey(l.IdMarca) ? marcas[l.IdMarca].Nombre : "N/A",
+                IdMateria = l.IdMateria,
+                NombreMateria = materias.ContainsKey(l.IdMateria) ? materias[l.IdMateria].Nombre : "N/A",
+                IdProveedor = l.IdProveedor,
+                NombreProveedor = proveedores.ContainsKey(l.IdProveedor) ? proveedores[l.IdProveedor].Nombre : "N/A",
+                FechaEntrada = l.FechaEntrada,
+                FechaVencimiento = l.FechaVencimiento,
+                Cantidad = l.Cantidad,
+                IdUnidadMedida = l.IdUnidadMedida,
+                NombreUnidadMedida = unidades.ContainsKey(l.IdUnidadMedida) ? unidades[l.IdUnidadMedida].Nombre : "N/A",
+                SimboloUnidadMedida = unidades.ContainsKey(l.IdUnidadMedida) ? unidades[l.IdUnidadMedida].Abreviatura : "N/A",
+                CostoUnitario = l.CostoUnitario,
+                CostoTotal = l.CostoTotal,
+                CantidadInicial = l.CantidadInicial,
+                CantidadDisponible = l.CantidadDisponible,
+                Estado = l.Estado,
+                NombreEstado = l.Estado switch
+                {
+                    1 => "Disponible",
+                    2 => "En uso",
+                    3 => "Agotado",
+                    4 => "Vencido",
+                    5 => "Bloqueado",
+                    6 => "Devuelto",
+                    7 => "En cuarentena",
+                    _ => "Desconocido"
+                },
+                DiasParaVencimiento = (int)(l.FechaVencimiento - DateTime.Now).TotalDays
+            }).ToList();
+        }
+
         public async Task<LotesMateriaPrimaEntity> ObtenerLoteMateriaPrimaPorIdAsync(int id)
         {
             var lote = await _lotesMateriaPrimaRepository.FindByIdAsync(id);
@@ -96,7 +148,8 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             if (lote != null)
             {
                 var estadoAnterior = lote.Estado;
-                lote.Estado = actualizarEstadoDTO.EstadoNuevo;
+                var estadoNuevo = actualizarEstadoDTO.EstadoNuevo == 0 ? 5 : actualizarEstadoDTO.EstadoNuevo;
+                lote.Estado = estadoNuevo;
                 await _lotesMateriaPrimaRepository.UpdateAsync(lote);
 
                 try
@@ -110,8 +163,8 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 }
                 catch { /* fire-and-forget */ }
 
-                // Si se da de baja (estado = 0), auto-generar movimiento de vencimiento
-                if (actualizarEstadoDTO.EstadoNuevo == 0 && estadoAnterior != 0)
+                // Si se marca como vencido, auto-generar movimiento de vencimiento
+                if (estadoNuevo == 4 && estadoAnterior != 4)
                 {
                     var movimiento = new MovimientosMateriaPrimaEntity
                     {
@@ -187,26 +240,14 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             var existente = await _lotesMateriaPrimaRepository.FindByIdAsync(idLote);
             if (existente != null)
             {
-                // Auto-generar movimiento de ajuste antes de eliminar
-                var movimiento = new MovimientosMateriaPrimaEntity
-                {
-                    IdLoteMateria = existente.Id,
-                    IdTipoMovimiento = (int)TipoMovimientoMateriaPrima.Ajuste,
-                    Fecha = DateTime.Now,
-                    Cantidad = existente.CantidadDisponible,
-                    IdUnidadMedida = existente.IdUnidadMedida,
-                    IdUsuario = idUsuario,
-                    Observacion = $"Eliminación de lote - {existente.CantidadDisponible} unidades"
-                };
-                await _movimientosMateriaPrimaRepository.CreateAsync(movimiento);
-
-                await _lotesMateriaPrimaRepository.DeleteAsync(idLote);
+                existente.Estado = 5;
+                await _lotesMateriaPrimaRepository.UpdateAsync(existente);
 
                 try
                 {
                     var detalle = JsonSerializer.Serialize(new
                     {
-                        cantidadDisponible = existente.CantidadDisponible
+                        estadoNuevo = 5
                     });
                     await _auditoriaService.RegistrarAsync("StockMP", idLote.ToString(), "Eliminar", detalle, idUsuario);
                 }

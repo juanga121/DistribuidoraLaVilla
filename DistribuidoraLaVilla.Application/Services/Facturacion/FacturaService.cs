@@ -22,6 +22,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
         private readonly IUnitOfWork _unitOfWork;
         private readonly ICuentasCobrarService _cuentasCobrarService;
         private readonly IAuditoriaService _auditoriaService;
+        private readonly ICajaService _cajaService;
 
         public FacturaService(
             IInventarioService inventarioService,
@@ -33,7 +34,8 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             IGenericRepository<CuentasCobrarEntity, int> cxcRepository,
             IUnitOfWork unitOfWork,
             ICuentasCobrarService cuentasCobrarService,
-            IAuditoriaService auditoriaService)
+            IAuditoriaService auditoriaService,
+            ICajaService cajaService)
         {
             _inventarioService = inventarioService;
             _facturaRepository = facturaRepository;
@@ -45,6 +47,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             _unitOfWork = unitOfWork;
             _cuentasCobrarService = cuentasCobrarService;
             _auditoriaService = auditoriaService;
+            _cajaService = cajaService;
         }
 
         public async Task<FacturaResponseDTO> CrearFacturaContadoAsync(CrearFacturaDTO solicitud)
@@ -206,7 +209,8 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 IdProducto = d.IdProducto,
                 Cantidad = d.Cantidad,
                 Precio = d.Precio,
-                IdUnidadMedida = d.IdUnidadMedida
+                IdUnidadMedida = d.IdUnidadMedida,
+                EsVentaPorPeso = d.EsVentaPorPeso
             }).ToList();
 
             // ── 4. Crear factura (reusa la lógica transaccional base) ──
@@ -346,8 +350,10 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         };
                     }
 
+                    var esVentaPorPeso = detalle.EsVentaPorPeso ?? producto.VentaPorPeso;
+
                     // BR-VP-11: Reject zero price for weight products
-                    if (producto.VentaPorPeso && detalle.Precio <= 0)
+                    if (esVentaPorPeso && detalle.Precio <= 0)
                     {
                         await _unitOfWork.RollbackAsync();
                         return new FacturaResponseDTO
@@ -363,7 +369,8 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         detalle.Cantidad,
                         detalle.IdUnidadMedida,
                         idUsuario,
-                        $"Venta Factura {(tipoFactura == TipoFacturaEnum.Credito ? "Crédito" : "Contado")} - Cliente: {cliente.Nombre ?? idCliente.ToString()}"
+                        $"Venta Factura {(tipoFactura == TipoFacturaEnum.Credito ? "Crédito" : "Contado")} - Cliente: {cliente.Nombre ?? idCliente.ToString()}",
+                        esVentaPorPeso
                     );
 
                     decimal cantidadTotalConsumida = consumos.Sum(c => c.CantidadConsumida);
@@ -378,9 +385,9 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         IdUnidadMedida = detalle.IdUnidadMedida,
                         Precio = detalle.Precio,
                         Subtotal = subtotal,
-                        EsVentaPorPeso = producto.VentaPorPeso,
-                        PesoTotal = producto.VentaPorPeso ? cantidadTotalConsumida : null,
-                        PrecioKilo = producto.VentaPorPeso ? detalle.Precio : null
+                        EsVentaPorPeso = esVentaPorPeso,
+                        PesoTotal = esVentaPorPeso ? cantidadTotalConsumida : null,
+                        PrecioKilo = esVentaPorPeso ? detalle.Precio : null
                     });
 
                     totalFactura += subtotal;
@@ -426,6 +433,11 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 }
 
                 await _unitOfWork.CommitAsync();
+
+                if (tipoFactura == TipoFacturaEnum.Contado)
+                {
+                    await _cajaService.RegistrarIngresoFacturaContadoAsync(factura.Id, totalFactura, idUsuario, $"F{factura.Id:D6}", metodoPago);
+                }
 
                 try
                 {

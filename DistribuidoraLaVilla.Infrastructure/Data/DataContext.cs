@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using DistribuidoraLaVilla.Domain.Entities;
+using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Facturacion;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
 
@@ -23,6 +24,11 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
         public DbSet<OrdenProduccionEntity> OrdenesProduccion { get; set; }
         public DbSet<UsuariosEntity> Usuarios { get; set; }
         public DbSet<ClientesEntity> Clientes { get; set; }
+
+        // ── Caja ──
+        public DbSet<CajaAperturaEntity> CajaAperturas { get; set; }
+        public DbSet<CajaMovimientoEntity> CajaMovimientos { get; set; }
+        public DbSet<ReciboEntity> Recibos { get; set; }
 
         // ── Facturación ──
         public DbSet<FacturaEntity> Facturas { get; set; }

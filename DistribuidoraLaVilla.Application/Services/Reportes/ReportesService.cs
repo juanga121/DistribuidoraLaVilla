@@ -17,6 +17,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
         private readonly IGenericRepository<CuentasCobrarEntity, int> _cxcRepo;
         private readonly IGenericRepository<LotesProductosEntity, int> _loteRepo;
         private readonly IGenericRepository<ClientesEntity, Guid> _clienteRepo;
+        private readonly IGenericRepository<MateriaPrimaEntity, int> _materiaPrimaRepo;
         private readonly IGenericRepository<CategoriasProductosEntity, int> _categoriaRepo;
         private readonly IGenericRepository<MovimientoEntity, int> _movimientoRepo;
         private readonly IGenericRepository<TipoFacturaEntity, int> _tipoFacturaRepo;
@@ -31,6 +32,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             IGenericRepository<CuentasCobrarEntity, int> cxcRepo,
             IGenericRepository<LotesProductosEntity, int> loteRepo,
             IGenericRepository<ClientesEntity, Guid> clienteRepo,
+            IGenericRepository<MateriaPrimaEntity, int> materiaPrimaRepo,
             IGenericRepository<CategoriasProductosEntity, int> categoriaRepo,
             IGenericRepository<MovimientoEntity, int> movimientoRepo,
             IGenericRepository<TipoFacturaEntity, int> tipoFacturaRepo,
@@ -44,6 +46,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             _cxcRepo = cxcRepo;
             _loteRepo = loteRepo;
             _clienteRepo = clienteRepo;
+            _materiaPrimaRepo = materiaPrimaRepo;
             _categoriaRepo = categoriaRepo;
             _movimientoRepo = movimientoRepo;
             _tipoFacturaRepo = tipoFacturaRepo;
@@ -197,6 +200,81 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 CxcVencido = cxcVencido,
                 StockBajo = stockBajo,
                 UltimasFacturas = ultimasFacturas
+            };
+        }
+
+        // ──────────────────────────────────────────────
+        // T-09: Balance mínimo
+        // ──────────────────────────────────────────────
+
+        public async Task<BalanceMinimoReporteDTO> GetBalanceMinimoAsync()
+        {
+            var cxcItems = await _cxcRepo.GetQueryable()
+                .Where(c => c.Estado == 1 && (c.SaldoPendiente ?? 0) > 0)
+                .Join(_clienteRepo.GetQueryable(),
+                    c => c.IdCliente,
+                    cl => (Guid?)cl.IdCliente,
+                    (c, cl) => new BalanceCxcItemDTO
+                    {
+                        IdFactura = c.IdFactura ?? 0,
+                        Cliente = cl.Nombre ?? string.Empty,
+                        FechaEmision = c.FechaEmision ?? DateTime.MinValue,
+                        FechaVencimiento = c.FechaVencimiento ?? DateTime.MinValue,
+                        SaldoPendiente = c.SaldoPendiente ?? 0
+                    })
+                .OrderByDescending(c => c.SaldoPendiente)
+                .ToListAsync();
+
+            var productosTerminados = await _loteRepo.GetQueryable()
+                .Where(l => l.Estado == 1 && l.CantidadDisponible > 0)
+                .Join(_productoRepo.GetQueryable().Where(p => p.Estado == 1),
+                    l => l.IdProducto,
+                    p => p.Id,
+                    (l, p) => new BalanceProductoItemDTO
+                    {
+                        IdProducto = p.Id,
+                        NombreProducto = p.Nombre ?? string.Empty,
+                        CantidadDisponible = l.CantidadDisponible,
+                        ValorUnitario = p.VentaPorPeso ? l.PrecioKilo : l.PrecioUnitario,
+                        ValorTotal = l.CantidadDisponible * (p.VentaPorPeso ? l.PrecioKilo : l.PrecioUnitario)
+                    })
+                .OrderBy(p => p.NombreProducto)
+                .ToListAsync();
+
+            var materiaPrima = await _loteMPRepo.GetQueryable()
+                .Where(l => l.Estado == 1 && l.CantidadDisponible > 0)
+                .Join(_materiaPrimaRepo.GetQueryable().Where(m => m.Estado == 1),
+                    l => l.IdMateria,
+                    m => m.Id,
+                    (l, m) => new BalanceMateriaPrimaItemDTO
+                    {
+                        IdMateriaPrima = m.Id,
+                        NombreMateriaPrima = m.Nombre ?? string.Empty,
+                        CantidadDisponible = l.CantidadDisponible,
+                        ValorUnitario = l.CostoUnitario,
+                        ValorTotal = l.CantidadDisponible * l.CostoUnitario
+                    })
+                .OrderBy(m => m.NombreMateriaPrima)
+                .ToListAsync();
+
+            var cuentasPorCobrarTotal = cxcItems.Sum(c => c.SaldoPendiente);
+            var inventarioProductosTotal = productosTerminados.Sum(p => p.ValorTotal);
+            var inventarioMateriaPrimaTotal = materiaPrima.Sum(m => m.ValorTotal);
+            var activosTotal = cuentasPorCobrarTotal + inventarioProductosTotal + inventarioMateriaPrimaTotal;
+
+            return new BalanceMinimoReporteDTO
+            {
+                FechaGeneracion = DateTime.Now,
+                CuentasPorCobrarTotal = cuentasPorCobrarTotal,
+                InventarioProductosTotal = inventarioProductosTotal,
+                InventarioMateriaPrimaTotal = inventarioMateriaPrimaTotal,
+                ActivosTotal = activosTotal,
+                PasivosTotal = 0,
+                PatrimonioTotal = activosTotal,
+                PasivosNota = "Los pasivos no están modelados todavía en el sistema, por eso se muestran en cero.",
+                CuentasPorCobrar = cxcItems,
+                ProductosTerminados = productosTerminados,
+                MateriaPrima = materiaPrima
             };
         }
 
@@ -585,7 +663,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
 
             // ── CxC ──
             var cxcPendientes = await _cxcRepo.GetQueryable()
-                .Where(c => c.Estado == 1 && (c.SaldoPendiente ?? 0) > 0)
+                .Where(c => c.Estado == 1 && c.SaldoPendiente.HasValue && c.SaldoPendiente > 0)
                 .ToListAsync();
 
             var cxcVencidas = cxcPendientes

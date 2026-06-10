@@ -37,6 +37,24 @@ namespace DistribuidoraLaVilla.Api.Controllers
         }
 
         /// <summary>
+        /// GET /api/reportes/balance-minimo
+        /// Estado de situación mínimo con activos, pasivos y patrimonio.
+        /// </summary>
+        [HttpGet("balance-minimo")]
+        public async Task<ActionResult<BalanceMinimoReporteDTO>> GetBalanceMinimo()
+        {
+            try
+            {
+                var resultado = await _reportesService.GetBalanceMinimoAsync();
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = $"Error al obtener balance mínimo: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
         /// GET /api/reportes/ventas?desde=&amp;hasta=&amp;idCliente=&amp;idProducto=
         /// Reporte de ventas por rango de fechas con filtros opcionales.
         /// </summary>

@@ -14,6 +14,9 @@ namespace DistribuidoraLaVilla.Domain.DTOS
         public DateTime FechaEntrada { get; set; }
         public string? NombreMarca { get; set; }
         public string? NombreProveedor { get; set; }
+        public decimal CostoUnitario { get; set; }
+        public decimal CostoTotalLote { get; set; }
+        public int? DiasParaVencimiento { get; set; }
     }
 
     /// <summary>
@@ -29,6 +32,8 @@ namespace DistribuidoraLaVilla.Domain.DTOS
         public string? SimboloUnidadMedida { get; set; }
         public int LotesDisponibles { get; set; }
         public DateTime? ProximaFechaVencimiento { get; set; }
+        public decimal CostoPromedio { get; set; }
+        public decimal ValorTotalStock { get; set; }
         public List<LoteStockDTO> DetalleLotes { get; set; } = new();
     }
 }

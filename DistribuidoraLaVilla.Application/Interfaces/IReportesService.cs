@@ -5,6 +5,7 @@ namespace DistribuidoraLaVilla.Application.Interfaces
     public interface IReportesService
     {
         Task<DashboardDTO> GetDashboardAsync();
+        Task<BalanceMinimoReporteDTO> GetBalanceMinimoAsync();
         Task<VentasReporteDTO> GetVentasAsync(DateTime desde, DateTime hasta, Guid? idCliente, int? idProducto);
         Task<CxcAgingReporteDTO> GetCxcAgingAsync(Guid? idCliente);
         Task<InventarioReporteDTO> GetInventarioAsync(int? idCategoria, int stockThreshold = 10);

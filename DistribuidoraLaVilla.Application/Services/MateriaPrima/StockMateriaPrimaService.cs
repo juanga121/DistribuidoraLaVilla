@@ -71,6 +71,10 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                         .OrderBy(l => l.FechaVencimiento)
                         .First()
                         .FechaVencimiento,
+                    CostoPromedio = grupo.Sum(l => l.CantidadDisponible) > 0 
+                        ? grupo.Sum(l => l.CostoUnitario * l.CantidadDisponible) / grupo.Sum(l => l.CantidadDisponible)
+                        : 0,
+                    ValorTotalStock = grupo.Sum(l => l.CantidadDisponible * l.CostoUnitario),
                     DetalleLotes = grupo
                         .OrderBy(l => l.FechaVencimiento)
                         .Select(l => new LoteStockDTO
@@ -79,8 +83,11 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                             CantidadDisponible = l.CantidadDisponible,
                             FechaVencimiento = l.FechaVencimiento,
                             FechaEntrada = l.FechaEntrada,
-                            NombreMarca = "", // Se puede completar con Join si existe relación
-                            NombreProveedor = "" // Se puede completar con Join si existe relación
+                            NombreMarca = "",
+                            NombreProveedor = "",
+                            CostoUnitario = l.CostoUnitario,
+                            CostoTotalLote = l.CostoTotal,
+                            DiasParaVencimiento = (int)(l.FechaVencimiento - DateTime.Now).TotalDays
                         })
                         .ToList()
                 })
@@ -145,6 +152,10 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                     .OrderBy(l => l.FechaVencimiento)
                     .First()
                     .FechaVencimiento,
+                CostoPromedio = lotesActivos.Sum(l => l.CantidadDisponible) > 0
+                    ? lotesActivos.Sum(l => l.CostoUnitario * l.CantidadDisponible) / lotesActivos.Sum(l => l.CantidadDisponible)
+                    : 0,
+                ValorTotalStock = lotesActivos.Sum(l => l.CantidadDisponible * l.CostoUnitario),
                 DetalleLotes = lotesActivos
                     .OrderBy(l => l.FechaVencimiento)
                     .Select(l => new LoteStockDTO
@@ -154,7 +165,10 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                         FechaVencimiento = l.FechaVencimiento,
                         FechaEntrada = l.FechaEntrada,
                         NombreMarca = "",
-                        NombreProveedor = ""
+                        NombreProveedor = "",
+                        CostoUnitario = l.CostoUnitario,
+                        CostoTotalLote = l.CostoTotal,
+                        DiasParaVencimiento = (int)(l.FechaVencimiento - DateTime.Now).TotalDays
                     })
                     .ToList()
             };

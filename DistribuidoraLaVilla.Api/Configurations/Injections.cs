@@ -1,6 +1,7 @@
 ﻿using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Application.Services;
 using DistribuidoraLaVilla.Application.Services.Auditoria;
+using DistribuidoraLaVilla.Application.Services.Caja;
 using DistribuidoraLaVilla.Application.Services.CxC;
 using DistribuidoraLaVilla.Application.Services.Facturacion;
 using DistribuidoraLaVilla.Application.Services.Inventario;
@@ -40,6 +41,8 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<IInventarioService, InventarioService>();
             services.AddScoped<IReportesService, ReportesService>();
             services.AddScoped<IAuditoriaService, AuditoriaService>();
+            services.AddScoped<ICajaService, CajaService>();
+            services.AddScoped<IRecibosCajaService, RecibosCajaService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             return services;
         }

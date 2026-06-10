@@ -6,5 +6,6 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Facturacion
         public decimal Cantidad { get; set; }
         public int IdUnidadMedida { get; set; }
         public decimal Precio { get; set; }
+        public bool? EsVentaPorPeso { get; set; }
     }
 }

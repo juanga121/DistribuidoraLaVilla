@@ -124,7 +124,8 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             decimal cantidadRequerida,
             int idUnidadMedida,
             Guid idUsuario,
-            string observacion)
+            string observacion,
+            bool esVentaPorPeso)
         {
             // 1. Verificar que el producto exista
             var producto = await _productosRepository.FindByIdAsync(idProducto)
@@ -166,12 +167,12 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
 
                 // 5. Crear registro en movimientos (tipo_movimiento = 2 Venta)
                 // 6. Calcular total_movimiento = cantidad * PrecioKilo (weight) or PrecioUnitario (unit)
-                var costBasis = producto.VentaPorPeso
+                var costBasis = esVentaPorPeso
                     ? lote.PrecioKilo
                     : lote.PrecioUnitario;
 
                 // BR-VP-06: Validate PrecioKilo > 0 for weight products
-                if (producto.VentaPorPeso && lote.PrecioKilo <= 0)
+                if (esVentaPorPeso && lote.PrecioKilo <= 0)
                 {
                     throw new InvalidOperationException(
                         $"El lote del producto '{producto.Nombre}' tiene PrecioKilo inválido ({lote.PrecioKilo}) para una venta por peso");

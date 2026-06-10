@@ -1,6 +1,8 @@
 using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS.CxC;
+using DistribuidoraLaVilla.Domain.DTOS.Caja;
 using DistribuidoraLaVilla.Domain.Entities;
+using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Facturacion;
 using DistribuidoraLaVilla.Domain.Interfaces;
 
@@ -12,6 +14,8 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
         private readonly IGenericRepository<PagoCuentaEntity, int> _pagoRepo;
         private readonly IGenericRepository<FacturaEntity, int> _facturaRepo;
         private readonly IGenericRepository<ClientesEntity, Guid> _clienteRepo;
+        private readonly IGenericRepository<ReciboEntity, int> _reciboRepo;
+        private readonly ICajaService _cajaService;
         private readonly IUnitOfWork _unitOfWork;
 
         public CuentasCobrarService(
@@ -19,12 +23,16 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
             IGenericRepository<PagoCuentaEntity, int> pagoRepo,
             IGenericRepository<FacturaEntity, int> facturaRepo,
             IGenericRepository<ClientesEntity, Guid> clienteRepo,
+            IGenericRepository<ReciboEntity, int> reciboRepo,
+            ICajaService cajaService,
             IUnitOfWork unitOfWork)
         {
             _cxcRepo = cxcRepo;
             _pagoRepo = pagoRepo;
             _facturaRepo = facturaRepo;
             _clienteRepo = clienteRepo;
+            _reciboRepo = reciboRepo;
+            _cajaService = cajaService;
             _unitOfWork = unitOfWork;
         }
 
@@ -154,12 +162,43 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
 
                 await _cxcRepo.UpdateAsync(cxc);
 
+                // ── Fetch datos para el recibo ──
+                var cliente = cxc.IdCliente.HasValue
+                    ? await _clienteRepo.FindByIdAsync(cxc.IdCliente.Value)
+                    : null;
+
+                // ── Crear recibo ──
+                var recibo = new ReciboEntity
+                {
+                    IdPago = pago.Id,
+                    NumeroRecibo = $"RC-{pago.Id:D6}",
+                    FechaEmision = DateTime.Now,
+                    IdCliente = cxc.IdCliente,
+                    ClienteNombre = cliente?.Nombre ?? string.Empty,
+                    NumeroFactura = cxc.IdFactura.HasValue ? $"F{cxc.IdFactura:D6}" : null,
+                    MontoPagado = dto.MontoPago,
+                    MetodoPago = dto.MetodoPago,
+                    IdUsuario = dto.IdUsuario
+                };
+                await _reciboRepo.CreateAsync(recibo);
+
                 await _unitOfWork.CommitAsync();
+
+                await _cajaService.RegistrarIngresoPagoCxcAsync(
+                    pago.Id,
+                    recibo.Id,
+                    dto.MontoPago,
+                    dto.IdUsuario,
+                    recibo.NumeroRecibo,
+                    recibo.NumeroFactura,
+                    dto.MetodoPago);
 
                 return new PagoResponseDTO
                 {
                     Exitoso = true,
                     IdPago = pago.Id,
+                    ReciboId = recibo.Id,
+                    NumeroRecibo = recibo.NumeroRecibo,
                     Mensaje = "Pago registrado exitosamente"
                 };
             }

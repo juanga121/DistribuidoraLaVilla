@@ -4,6 +4,7 @@ using DistribuidoraLaVilla.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20260606170500_AddRecibosCaja")]
+    partial class AddRecibosCaja
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -63,112 +66,6 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("auditoria");
-                });
-
-            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Caja.CajaAperturaEntity", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id_apertura");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<decimal?>("Diferencia")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("diferencia");
-
-                    b.Property<int>("Estado")
-                        .HasColumnType("int")
-                        .HasColumnName("estado");
-
-                    b.Property<DateTime>("FechaApertura")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_apertura");
-
-                    b.Property<DateTime?>("FechaCierre")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_cierre");
-
-                    b.Property<Guid>("IdUsuario")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("id_usuario");
-
-                    b.Property<decimal?>("MontoFinal")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("monto_final");
-
-                    b.Property<decimal>("MontoInicial")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("monto_inicial");
-
-                    b.Property<decimal?>("TotalEgresos")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("total_egresos");
-
-                    b.Property<decimal?>("TotalIngresos")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("total_ingresos");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("caja_apertura");
-                });
-
-            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Caja.CajaMovimientoEntity", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id_movimiento");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Concepto")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
-                        .HasColumnName("concepto");
-
-                    b.Property<DateTime>("Fecha")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha");
-
-                    b.Property<int>("IdApertura")
-                        .HasColumnType("int")
-                        .HasColumnName("id_apertura");
-
-                    b.Property<int?>("IdFactura")
-                        .HasColumnType("int")
-                        .HasColumnName("id_factura");
-
-                    b.Property<int?>("IdPago")
-                        .HasColumnType("int")
-                        .HasColumnName("id_pago");
-
-                    b.Property<int?>("IdRecibo")
-                        .HasColumnType("int")
-                        .HasColumnName("id_recibo");
-
-                    b.Property<Guid>("IdUsuario")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("id_usuario");
-
-                    b.Property<int?>("MetodoPago")
-                        .HasColumnType("int")
-                        .HasColumnName("metodo_pago");
-
-                    b.Property<decimal>("Monto")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("monto");
-
-                    b.Property<int>("TipoMovimiento")
-                        .HasColumnType("int")
-                        .HasColumnName("tipo_movimiento");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("caja_movimientos");
                 });
 
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Caja.ReciboEntity", b =>

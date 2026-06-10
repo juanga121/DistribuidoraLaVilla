@@ -1,6 +1,4 @@
 using DistribuidoraLaVilla.Application.Services.MateriaPrima;
-using DistribuidoraLaVilla.Domain.DTOS;
-using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
@@ -12,45 +10,6 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
     {
         private readonly MovimientosMateriaPrimaService _movimientosService = movimientosService;
 
-        /// <summary>
-        /// Crea un nuevo movimiento de materia prima y actualiza el stock del lote
-        /// </summary>
-        /// <param name="movimientoDTO">Datos del movimiento a crear</param>
-        /// <returns>Información del movimiento creado con stock anterior y nuevo</returns>
-        /// <response code="200">Movimiento creado exitosamente</response>
-        /// <response code="400">Error de validación o stock insuficiente</response>
-        /// <response code="500">Error interno del servidor</response>
-        [HttpPost]
-        [Route("CrearMovimiento")]
-        [ProducesResponseType(typeof(MovimientoMateriaPrimaResponseDTO), 200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(500)]
-        public async Task<IActionResult> CrearMovimiento([FromBody] MovimientoMateriaPrimaDTO movimientoDTO)
-        {
-            try
-            {
-                var resultado = await _movimientosService.CrearMovimientoAsync(movimientoDTO);
-                return Ok(new 
-                { 
-                    mensaje = "Movimiento creado exitosamente",
-                    movimiento = resultado
-                });
-            }
-            catch (ValidationException ex)
-            {
-                return BadRequest(new { errores = ex.Errors.Select(e => e.ErrorMessage) });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new { mensaje = "Error al crear el movimiento", detalle = ex.Message });
-            }
-        }
-
-        /// <summary>
-        /// Obtiene todos los movimientos de materia prima
-        /// </summary>
-        /// <returns>Lista de todos los movimientos registrados</returns>
-        /// <response code="200">Lista de movimientos obtenida exitosamente</response>
         [HttpGet]
         [Route("ObtenerMovimientos")]
         [ProducesResponseType(200)]
@@ -67,13 +26,27 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             }
         }
 
-        /// <summary>
-        /// Obtiene un movimiento específico por ID
-        /// </summary>
-        /// <param name="id">ID del movimiento</param>
-        /// <returns>Datos del movimiento solicitado</returns>
-        /// <response code="200">Movimiento encontrado</response>
-        /// <response code="404">Movimiento no encontrado</response>
+        [HttpGet]
+        [Route("ObtenerMovimientosDetalle")]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> ObtenerMovimientosDetalle()
+        {
+            try
+            {
+                var movimientos = await _movimientosService.ObtenerMovimientosDetalleAsync();
+                return Ok(new
+                {
+                    success = true,
+                    message = "Movimientos obtenidos correctamente",
+                    data = movimientos
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = "Error al obtener movimientos", detalle = ex.Message });
+            }
+        }
+
         [HttpGet]
         [Route("ObtenerMovimientoPorId/{id}")]
         [ProducesResponseType(200)]
@@ -91,12 +64,6 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             }
         }
 
-        /// <summary>
-        /// Obtiene todos los movimientos de un lote específico
-        /// </summary>
-        /// <param name="idLote">ID del lote de materia prima</param>
-        /// <returns>Lista de movimientos del lote</returns>
-        /// <response code="200">Movimientos obtenidos exitosamente</response>
         [HttpGet]
         [Route("ObtenerMovimientosPorLote/{idLote}")]
         [ProducesResponseType(200)]
@@ -113,12 +80,6 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             }
         }
 
-        /// <summary>
-        /// Obtiene movimientos filtrados por tipo
-        /// </summary>
-        /// <param name="idTipoMovimiento">ID del tipo de movimiento (1=Entrada, 2=Consumo, 3=Ajuste, 4=Devolución, 5=Vencimiento)</param>
-        /// <returns>Lista de movimientos del tipo especificado</returns>
-        /// <response code="200">Movimientos obtenidos exitosamente</response>
         [HttpGet]
         [Route("ObtenerMovimientosPorTipo/{idTipoMovimiento}")]
         [ProducesResponseType(200)]
@@ -135,13 +96,6 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             }
         }
 
-        /// <summary>
-        /// Obtiene movimientos en un rango de fechas
-        /// </summary>
-        /// <param name="fechaInicio">Fecha de inicio del rango</param>
-        /// <param name="fechaFin">Fecha de fin del rango</param>
-        /// <returns>Lista de movimientos en el rango especificado</returns>
-        /// <response code="200">Movimientos obtenidos exitosamente</response>
         [HttpGet]
         [Route("ObtenerMovimientosPorFechas")]
         [ProducesResponseType(200)]
@@ -158,11 +112,6 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             }
         }
 
-        /// <summary>
-        /// Obtiene la lista de tipos de movimiento disponibles
-        /// </summary>
-        /// <returns>Lista de tipos de movimiento con su ID y descripción</returns>
-        /// <response code="200">Lista de tipos obtenida exitosamente</response>
         [HttpGet]
         [Route("ObtenerTiposMovimiento")]
         [ProducesResponseType(200)]
