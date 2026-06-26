@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Security.Claims;
 
 namespace DistribuidoraLaVilla.Api.Controllers.Productos
 {
@@ -29,7 +30,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         {
             try
             {
-                var resultado = await _recetaService.CrearRecetaAsync(dto);
+                var resultado = await _recetaService.CrearRecetaAsync(dto, GetUserId());
                 return Ok(new
                 {
                     success = true,
@@ -135,7 +136,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         {
             try
             {
-                var resultado = await _recetaService.ActualizarRecetaAsync(id, dto);
+                var resultado = await _recetaService.ActualizarRecetaAsync(id, dto, GetUserId());
                 return Ok(new
                 {
                     success = true,
@@ -180,7 +181,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [HttpPut("ActualizarEstadoReceta")]
         public async Task<ActionResult> ActualizarEstadoReceta([FromQuery] int id, [FromQuery] int nuevoEstado)
         {
-            var resultado = await _recetaService.ActualizarEstadoRecetaAsync(id, nuevoEstado);
+            var resultado = await _recetaService.ActualizarEstadoRecetaAsync(id, nuevoEstado, GetUserId());
             if (!resultado)
             {
                 return NotFound(new
@@ -205,7 +206,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [HttpDelete("EliminarReceta/{id}")]
         public async Task<ActionResult> EliminarReceta(int id)
         {
-            var resultado = await _recetaService.EliminarRecetaAsync(id);
+            var resultado = await _recetaService.EliminarRecetaAsync(id, GetUserId());
             if (!resultado)
             {
                 return NotFound(new
@@ -220,6 +221,14 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
                 success = true,
                 message = "Receta eliminada (desactivada) correctamente"
             });
+        }
+
+        private Guid GetUserId()
+        {
+            var nameIdentifier = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return !string.IsNullOrEmpty(nameIdentifier) && Guid.TryParse(nameIdentifier, out var userId)
+                ? userId
+                : Guid.Empty;
         }
     }
 }

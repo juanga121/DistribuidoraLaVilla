@@ -15,6 +15,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
     /// </summary>
     public class InventarioService : IInventarioService
     {
+        private readonly IUnitOfWork _unitOfWork;
         private readonly IGenericRepository<LotesMateriaPrimaEntity, int> _lotesMateriaPrimaRepository;
         private readonly IGenericRepository<MovimientosMateriaPrimaEntity, int> _movimientosMateriaPrimaRepository;
         private readonly IGenericRepository<MateriaPrimaEntity, int> _materiaPrimaRepository;
@@ -26,6 +27,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
         private readonly IGenericRepository<ProductosEntity, int> _productosRepository;
 
         public InventarioService(
+            IUnitOfWork unitOfWork,
             IGenericRepository<LotesMateriaPrimaEntity, int> lotesMateriaPrimaRepository,
             IGenericRepository<MovimientosMateriaPrimaEntity, int> movimientosMateriaPrimaRepository,
             IGenericRepository<MateriaPrimaEntity, int> materiaPrimaRepository,
@@ -34,6 +36,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             IGenericRepository<MovimientoEntity, int> movimientosRepository,
             IGenericRepository<ProductosEntity, int> productosRepository)
         {
+            _unitOfWork = unitOfWork;
             _lotesMateriaPrimaRepository = lotesMateriaPrimaRepository;
             _movimientosMateriaPrimaRepository = movimientosMateriaPrimaRepository;
             _materiaPrimaRepository = materiaPrimaRepository;
@@ -52,70 +55,94 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             Guid idUsuario,
             string observacion)
         {
-            var materiaPrima = await _materiaPrimaRepository.FindByIdAsync(idMateriaPrima)
-                ?? throw new InvalidOperationException(
-                    $"No se encontró la materia prima con ID {idMateriaPrima}");
+            // Si ya hay una transacción activa (ej: desde ProduccionService),
+            // participamos en ella sin crear una nueva.
+            bool ownTransaction = !_unitOfWork.HasActiveTransaction;
 
-            var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
+            if (ownTransaction)
+                await _unitOfWork.BeginTransactionAsync();
 
-            // Obtener lotes disponibles ordenados por vencimiento (FIFO)
-            var lotesDisponibles = _lotesMateriaPrimaRepository.GetByFilter(l =>
-                l.IdMateria == idMateriaPrima &&
-                l.Estado == 1 &&
-                l.CantidadDisponible > 0
-            ).OrderBy(l => l.FechaVencimiento).ToList();
-
-            var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
-
-            if (stockTotal < cantidadRequerida)
+            try
             {
-                throw new InvalidOperationException(
-                    $"Stock insuficiente de '{materiaPrima.Nombre}'. " +
-                    $"Requerido: {cantidadRequerida}, Disponible: {stockTotal}");
+                var materiaPrima = await _materiaPrimaRepository.FindByIdAsync(idMateriaPrima)
+                    ?? throw new InvalidOperationException(
+                        $"No se encontró la materia prima con ID {idMateriaPrima}");
+
+                var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
+
+                // Obtener lotes disponibles ordenados por vencimiento (FIFO)
+                var lotesDisponibles = _lotesMateriaPrimaRepository.GetByFilter(l =>
+                    l.IdMateria == idMateriaPrima &&
+                    l.Estado == 1 &&
+                    l.CantidadDisponible > 0
+                ).OrderBy(l => l.FechaVencimiento).ToList();
+
+                var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
+
+                if (stockTotal < cantidadRequerida)
+                {
+                    throw new InvalidOperationException(
+                        $"Stock insuficiente de '{materiaPrima.Nombre}'. " +
+                        $"Requerido: {cantidadRequerida}, Disponible: {stockTotal}");
+                }
+
+                var consumos = new List<ConsumoIngredienteDTO>();
+                decimal cantidadPendiente = cantidadRequerida;
+
+                // Consumir de los lotes ordenados por vencimiento (FIFO)
+                foreach (var lote in lotesDisponibles)
+                {
+                    if (cantidadPendiente <= 0) break;
+
+                    decimal cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
+
+                    // Descontar del lote
+                    lote.CantidadDisponible -= cantidadAConsumir;
+                    await _lotesMateriaPrimaRepository.UpdateAsync(lote);
+
+                    // Crear movimiento de consumo
+                    var movimiento = new MovimientosMateriaPrimaEntity
+                    {
+                        IdLoteMateria = lote.Id,
+                        IdTipoMovimiento = (int)TipoMovimientoMateriaPrima.Consumo,
+                        Fecha = DateTime.Now,
+                        Cantidad = cantidadAConsumir,
+                        IdUnidadMedida = idUnidadMedida,
+                        IdUsuario = idUsuario,
+                        Observacion = observacion
+                    };
+
+                    await _movimientosMateriaPrimaRepository.CreateAsync(movimiento);
+
+                    consumos.Add(new ConsumoIngredienteDTO
+                    {
+                        IdMateriaPrima = idMateriaPrima,
+                        NombreMateriaPrima = materiaPrima.Nombre,
+                        CantidadRequerida = cantidadRequerida,
+                        CantidadConsumida = cantidadAConsumir,
+                        UnidadMedida = unidadMedida?.Abreviatura,
+                        IdMovimiento = movimiento.Id
+                    });
+
+                    cantidadPendiente -= cantidadAConsumir;
+                }
+
+                if (ownTransaction)
+                    await _unitOfWork.CommitAsync();
+
+                return consumos;
             }
-
-            var consumos = new List<ConsumoIngredienteDTO>();
-            decimal cantidadPendiente = cantidadRequerida;
-
-            // Consumir de los lotes ordenados por vencimiento (FIFO)
-            foreach (var lote in lotesDisponibles)
+            catch
             {
-                if (cantidadPendiente <= 0) break;
-
-                decimal cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
-
-                // Descontar del lote
-                lote.CantidadDisponible -= cantidadAConsumir;
-                await _lotesMateriaPrimaRepository.UpdateAsync(lote);
-
-                // Crear movimiento de consumo
-                var movimiento = new MovimientosMateriaPrimaEntity
-                {
-                    IdLoteMateria = lote.Id,
-                    IdTipoMovimiento = (int)TipoMovimientoMateriaPrima.Consumo,
-                    Fecha = DateTime.Now,
-                    Cantidad = cantidadAConsumir,
-                    IdUnidadMedida = idUnidadMedida,
-                    IdUsuario = idUsuario,
-                    Observacion = observacion
-                };
-
-                await _movimientosMateriaPrimaRepository.CreateAsync(movimiento);
-
-                consumos.Add(new ConsumoIngredienteDTO
-                {
-                    IdMateriaPrima = idMateriaPrima,
-                    NombreMateriaPrima = materiaPrima.Nombre,
-                    CantidadRequerida = cantidadRequerida,
-                    CantidadConsumida = cantidadAConsumir,
-                    UnidadMedida = unidadMedida?.Abreviatura,
-                    IdMovimiento = movimiento.Id
-                });
-
-                cantidadPendiente -= cantidadAConsumir;
+                if (ownTransaction)
+                    await _unitOfWork.RollbackAsync();
+                throw;
             }
-
-            return consumos;
+            finally
+            {
+                if (ownTransaction)
+                    await _unitOfWork.DisposeAsync();
+            }
         }
 
         /// <inheritdoc/>

@@ -1,3 +1,5 @@
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators.Productos;
 using DistribuidoraLaVilla.Domain.DTOS.Productos;
@@ -17,25 +19,28 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         private readonly IGenericRepository<ProductosEntity, int> _productosRepository;
         private readonly IGenericRepository<MateriaPrimaEntity, int> _materiaPrimaRepository;
         private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository;
+        private readonly IAuditoriaService _auditoriaService;
         private readonly RecetaProductoDTOValidator _validator;
 
         public RecetaProductoService(
             IGenericRepository<RecetaProductoEntity, int> recetaRepository,
             IGenericRepository<ProductosEntity, int> productosRepository,
             IGenericRepository<MateriaPrimaEntity, int> materiaPrimaRepository,
-            IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository)
+            IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository,
+            IAuditoriaService auditoriaService)
         {
             _recetaRepository = recetaRepository;
             _productosRepository = productosRepository;
             _materiaPrimaRepository = materiaPrimaRepository;
             _unidadMedidaRepository = unidadMedidaRepository;
+            _auditoriaService = auditoriaService;
             _validator = new RecetaProductoDTOValidator();
         }
 
         /// <summary>
         /// Crea una nueva receta de producto
         /// </summary>
-        public async Task<RecetaProductoResponseDTO> CrearRecetaAsync(RecetaProductoDTO dto)
+        public async Task<RecetaProductoResponseDTO> CrearRecetaAsync(RecetaProductoDTO dto, Guid idUsuario)
         {
             // 1. Validar con FluentValidation
             var validationResult = await _validator.ValidateAsync(dto);
@@ -93,6 +98,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
             // 7. Guardar en repositorio
             await _recetaRepository.CreateAsync(receta);
+            await RegistrarAuditoriaAsync("RecetaProducto", receta.Id.ToString(), "Crear", new { idProducto = receta.IdProducto, idMateriaPrima = receta.IdMateriaPrima, cantidadRequerida = receta.CantidadRequerida, idUnidadMedida = receta.IdUnidadMedida }, idUsuario);
 
             // 8. Retornar respuesta completa
             return new RecetaProductoResponseDTO
@@ -125,7 +131,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             var unidadesMedidaDict = unidadesMedida.ToDictionary(um => um.Id);
 
             return recetas
-                .Where(r => r.Estado == 1)
                 .Select(r => new RecetaProductoResponseDTO
                 {
                     IdReceta = r.Id,
@@ -205,7 +210,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         /// <summary>
         /// Actualiza una receta existente
         /// </summary>
-        public async Task<RecetaProductoResponseDTO> ActualizarRecetaAsync(int id, RecetaProductoDTO dto)
+        public async Task<RecetaProductoResponseDTO> ActualizarRecetaAsync(int id, RecetaProductoDTO dto, Guid idUsuario)
         {
             // 1. Validar DTO
             var validationResult = await _validator.ValidateAsync(dto);
@@ -248,6 +253,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
             // 5. Guardar cambios
             await _recetaRepository.UpdateAsync(receta);
+            await RegistrarAuditoriaAsync("RecetaProducto", receta.Id.ToString(), "Modificar", new { idProducto = receta.IdProducto, idMateriaPrima = receta.IdMateriaPrima, cantidadRequerida = receta.CantidadRequerida, idUnidadMedida = receta.IdUnidadMedida }, idUsuario);
 
             // 6. Retornar respuesta completa
             var producto2 = await _productosRepository.FindByIdAsync(receta.IdProducto);
@@ -272,7 +278,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         /// <summary>
         /// Actualiza el estado de una receta
         /// </summary>
-        public async Task<bool> ActualizarEstadoRecetaAsync(int id, int nuevoEstado)
+        public async Task<bool> ActualizarEstadoRecetaAsync(int id, int nuevoEstado, Guid idUsuario)
         {
             var receta = await _recetaRepository.FindByIdAsync(id);
             if (receta == null)
@@ -282,13 +288,14 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
             receta.Estado = nuevoEstado;
             await _recetaRepository.UpdateAsync(receta);
+            await RegistrarAuditoriaAsync("RecetaProducto", receta.Id.ToString(), "CambioEstado", new { estadoNuevo = nuevoEstado }, idUsuario);
             return true;
         }
 
         /// <summary>
         /// Elimina (desactiva) una receta
         /// </summary>
-        public async Task<bool> EliminarRecetaAsync(int id)
+        public async Task<bool> EliminarRecetaAsync(int id, Guid idUsuario)
         {
             var receta = await _recetaRepository.FindByIdAsync(id);
             if (receta == null)
@@ -298,7 +305,17 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
             receta.Estado = 0;
             await _recetaRepository.UpdateAsync(receta);
+            await RegistrarAuditoriaAsync("RecetaProducto", receta.Id.ToString(), "Eliminar", new { estadoNuevo = 0 }, idUsuario);
             return true;
+        }
+
+        private async Task RegistrarAuditoriaAsync(string entidad, string? idEntidad, string accion, object detalle, Guid idUsuario)
+        {
+            try
+            {
+                await _auditoriaService.RegistrarAsync(entidad, idEntidad, accion, JsonSerializer.Serialize(detalle), idUsuario);
+            }
+            catch { }
         }
     }
 }

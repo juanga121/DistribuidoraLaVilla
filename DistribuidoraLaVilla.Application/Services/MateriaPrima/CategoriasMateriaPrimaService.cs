@@ -1,3 +1,5 @@
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.Entities;
@@ -9,11 +11,18 @@ using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 {
-    public class CategoriasMateriaPrimaService(IGenericRepository<CategoriaMateriaPrimaEntity, int> categoriasMateriaPrima)
+    public class CategoriasMateriaPrimaService
     {
-        private readonly IGenericRepository<CategoriaMateriaPrimaEntity, int> _categoriasMateriaPrima = categoriasMateriaPrima;
+        private readonly IGenericRepository<CategoriaMateriaPrimaEntity, int> _categoriasMateriaPrima;
+        private readonly IAuditoriaService _auditoriaService;
 
-        public async Task CrearCategoriaAsync(CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO)
+        public CategoriasMateriaPrimaService(IGenericRepository<CategoriaMateriaPrimaEntity, int> categoriasMateriaPrima, IAuditoriaService auditoriaService)
+        {
+            _categoriasMateriaPrima = categoriasMateriaPrima;
+            _auditoriaService = auditoriaService;
+        }
+
+        public async Task CrearCategoriaAsync(CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO, Guid idUsuario)
         {
             CategoriaMateriaPrimaEntity categoriaMateriaPrimaEntity = new()
             {
@@ -25,6 +34,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             };
 
             await _categoriasMateriaPrima.CreateAsync(categoriaMateriaPrimaEntity);
+            await RegistrarAuditoriaAsync("CategoriaMateriaPrima", categoriaMateriaPrimaEntity.Id.ToString(), "Crear", new { nombre = categoriaMateriaPrimaEntity.Nombre, descripcion = categoriaMateriaPrimaEntity.Descripcion }, idUsuario);
         }
 
         public async Task<List<CategoriaMateriaPrimaEntity>> ObtenerCategoriasAsync()
@@ -32,7 +42,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             return await _categoriasMateriaPrima.GetAllAsync();
         }
 
-        public async Task ActualizarEstadoCategorias(MateriaPrimaActualizarEstadoDTO categoriasMateriaPrimaActualizarEstadoDTO)
+        public async Task ActualizarEstadoCategorias(MateriaPrimaActualizarEstadoDTO categoriasMateriaPrimaActualizarEstadoDTO, Guid idUsuario)
         {
             var categoriaMateriaPrima = await _categoriasMateriaPrima.FindByIdAsync(categoriasMateriaPrimaActualizarEstadoDTO.Id);
 
@@ -41,6 +51,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 categoriaMateriaPrima.Estado = categoriasMateriaPrimaActualizarEstadoDTO.EstadoNuevo;
                 categoriaMateriaPrima.FechaActualizacion = DateTime.Now;
                 await _categoriasMateriaPrima.UpdateAsync(categoriaMateriaPrima);
+                await RegistrarAuditoriaAsync("CategoriaMateriaPrima", categoriaMateriaPrima.Id.ToString(), "CambioEstado", new { estadoNuevo = categoriaMateriaPrima.Estado }, idUsuario);
             }
             else
             {
@@ -48,7 +59,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             }
         }
 
-        public async Task ActualizarCategorias(int id, CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO)
+        public async Task ActualizarCategorias(int id, CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO, Guid idUsuario)
         {
             var categoriaMateriaPrima = await _categoriasMateriaPrima.FindByIdAsync(id);
 
@@ -59,6 +70,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 categoriaMateriaPrima.FechaActualizacion = DateTime.Now;
 
                 await _categoriasMateriaPrima.UpdateAsync(categoriaMateriaPrima);
+                await RegistrarAuditoriaAsync("CategoriaMateriaPrima", categoriaMateriaPrima.Id.ToString(), "Modificar", new { nombre = categoriaMateriaPrima.Nombre, descripcion = categoriaMateriaPrima.Descripcion }, idUsuario);
             }
         }
 
@@ -82,17 +94,27 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
         }
 
         // New: delete category by id using generic repository
-        public async Task EliminarCategoriaAsync(int idCategoria)
+        public async Task EliminarCategoriaAsync(int idCategoria, Guid idUsuario)
         {
             var existente = await _categoriasMateriaPrima.FindByIdAsync(idCategoria);
             if (existente != null)
             {
                 await _categoriasMateriaPrima.DeleteAsync(idCategoria);
+                await RegistrarAuditoriaAsync("CategoriaMateriaPrima", idCategoria.ToString(), "Eliminar", new { nombre = existente.Nombre }, idUsuario);
             }
             else
             {
                 throw new Exception("La categoria de materia prima no existe");
             }
+        }
+
+        private async Task RegistrarAuditoriaAsync(string entidad, string? idEntidad, string accion, object detalle, Guid idUsuario)
+        {
+            try
+            {
+                await _auditoriaService.RegistrarAsync(entidad, idEntidad, accion, JsonSerializer.Serialize(detalle), idUsuario);
+            }
+            catch { }
         }
     }
 }

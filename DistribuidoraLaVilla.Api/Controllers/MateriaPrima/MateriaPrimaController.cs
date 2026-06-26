@@ -1,6 +1,7 @@
 ﻿using DistribuidoraLaVilla.Application.Services.MateriaPrima;
 using DistribuidoraLaVilla.Domain.DTOS;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
 {
@@ -14,7 +15,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("CrearMateriaPrima")]
         public async Task<IActionResult> CrearMateriaPrima([FromBody] MateriaPrimaDTO materiaPrimaDTO)
         {
-            await _materiaPrimaService.CrearMateriaPrimaAsync(materiaPrimaDTO);
+            await _materiaPrimaService.CrearMateriaPrimaAsync(materiaPrimaDTO, GetUserId());
             return Ok();
         }
 
@@ -38,7 +39,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("ActualizarEstadoMateriaPrima")]
         public async Task<IActionResult> ActualizarEstadoMateriaPrima([FromBody] MateriaPrimaActualizarEstadoDTO materiaPrimaActualizarEstadoDTO)
         {
-            await _materiaPrimaService.ActualizarEstadoMateriaPrima(materiaPrimaActualizarEstadoDTO);
+            await _materiaPrimaService.ActualizarEstadoMateriaPrima(materiaPrimaActualizarEstadoDTO, GetUserId());
             return Ok();
         }
 
@@ -46,7 +47,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("ActualizarMateriaPrima/{idMateriaPrima}")]
         public async Task<IActionResult> ActualizarMateriaPrima(int idMateriaPrima, [FromBody] MateriaPrimaDTO materiaPrimaDTO)
         {
-            await _materiaPrimaService.ActualizarMateriaPrima(idMateriaPrima, materiaPrimaDTO);
+            await _materiaPrimaService.ActualizarMateriaPrima(idMateriaPrima, materiaPrimaDTO, GetUserId());
             return Ok();
         }      
 
@@ -62,8 +63,16 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("EliminarMateriaPrima/{idMateriaPrima}")]
         public async Task<IActionResult> EliminarMateriaPrima(int idMateriaPrima)
         {
-            await _materiaPrimaService.EliminarMateriaPrimaAsync(idMateriaPrima);
+            await _materiaPrimaService.EliminarMateriaPrimaAsync(idMateriaPrima, GetUserId());
             return Ok();
+        }
+
+        private Guid GetUserId()
+        {
+            var nameIdentifier = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return !string.IsNullOrEmpty(nameIdentifier) && Guid.TryParse(nameIdentifier, out var userId)
+                ? userId
+                : Guid.Empty;
         }
     }
 }

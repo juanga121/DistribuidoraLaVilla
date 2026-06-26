@@ -1,6 +1,7 @@
 ﻿using DistribuidoraLaVilla.Application.Services.MateriaPrima;
 using DistribuidoraLaVilla.Domain.DTOS;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
 {
@@ -14,7 +15,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("CrearCategoria")]
         public async Task<IActionResult> CrearCategoria(CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO)
         {
-            await _categoriasMateriaPrimaService.CrearCategoriaAsync(categoriasMateriaPrimaDTO);
+            await _categoriasMateriaPrimaService.CrearCategoriaAsync(categoriasMateriaPrimaDTO, GetUserId());
             return Ok();
         }
 
@@ -32,7 +33,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         {
             try
             {
-                await _categoriasMateriaPrimaService.ActualizarEstadoCategorias(categoriasMateriaPrimaActualizarEstadoDTO);
+                await _categoriasMateriaPrimaService.ActualizarEstadoCategorias(categoriasMateriaPrimaActualizarEstadoDTO, GetUserId());
                 return Ok();
             }
             catch (Exception ex)
@@ -45,7 +46,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("ActualizarCategorias/{id}")]
         public async Task<IActionResult> ActualizarCategorias(int id, [FromBody]CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO)
         {
-            await _categoriasMateriaPrimaService.ActualizarCategorias(id, categoriasMateriaPrimaDTO);
+            await _categoriasMateriaPrimaService.ActualizarCategorias(id, categoriasMateriaPrimaDTO, GetUserId());
             return Ok();
         }
 
@@ -69,8 +70,16 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("EliminarCategoria/{idCategoria}")]
         public async Task<IActionResult> EliminarCategoria(int idCategoria)
         {
-            await _categoriasMateriaPrimaService.EliminarCategoriaAsync(idCategoria);
+            await _categoriasMateriaPrimaService.EliminarCategoriaAsync(idCategoria, GetUserId());
             return Ok();
+        }
+
+        private Guid GetUserId()
+        {
+            var nameIdentifier = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return !string.IsNullOrEmpty(nameIdentifier) && Guid.TryParse(nameIdentifier, out var userId)
+                ? userId
+                : Guid.Empty;
         }
     }
 }

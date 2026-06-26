@@ -25,6 +25,10 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             {
                 return BadRequest(new { errores = ex.Errors.Select(e => e.ErrorMessage) });
             }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
             catch (Exception ex)
             {
                 return StatusCode(500, new { mensaje = "Error al crear el lote", detalle = ex.Message });
@@ -75,6 +79,10 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             catch (ValidationException ex)
             {
                 return BadRequest(new { errores = ex.Errors.Select(e => e.ErrorMessage) });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
             }
             catch (Exception ex)
             {

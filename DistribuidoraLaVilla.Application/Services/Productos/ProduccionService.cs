@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators.Productos;
@@ -23,6 +24,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesProductosRepository;
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosProductosRepository;
         private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository;
+        private readonly IAuditoriaService _auditoriaService;
         private readonly SolicitudProduccionDTOValidator _validator;
 
         public ProduccionService(
@@ -33,7 +35,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             IGenericRepository<ProductosEntity, int> productosRepository,
             IGenericRepository<LotesProductosEntity, int> lotesProductosRepository,
             IGenericRepository<MovimientosProductosEntity, int> movimientosProductosRepository,
-            IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository)
+            IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository,
+            IAuditoriaService auditoriaService)
         {
             _unitOfWork = unitOfWork;
             _inventarioService = inventarioService;
@@ -43,6 +46,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             _lotesProductosRepository = lotesProductosRepository;
             _movimientosProductosRepository = movimientosProductosRepository;
             _unidadMedidaRepository = unidadMedidaRepository;
+            _auditoriaService = auditoriaService;
             _validator = new SolicitudProduccionDTOValidator();
         }
 
@@ -173,6 +177,14 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 await _unitOfWork.CommitAsync();
 
+                await RegistrarAuditoriaAsync("Produccion", orden.Id.ToString(), "ProcesarProduccion", new
+                {
+                    idProducto = producto.Id,
+                    cantidad = solicitud.CantidadProducir,
+                    idLoteGenerado = nuevoLoteProducto.Id,
+                    idMovimientoEntradaProducto = movimientoEntradaProducto.Id
+                }, solicitud.IdUsuario);
+
                 return new ResultadoProduccionDTO
                 {
                     Exitoso = true,
@@ -244,7 +256,22 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             orden.Estado = 0;
             orden.Observaciones += $" | Cancelada por usuario {idUsuario} el {DateTime.Now:yyyy-MM-dd HH:mm}";
             await _ordenRepository.UpdateAsync(orden);
+
+            await RegistrarAuditoriaAsync("Produccion", orden.Id.ToString(), "CancelarOrden", new
+            {
+                observaciones = orden.Observaciones
+            }, idUsuario);
+
             return true;
+        }
+
+        private async Task RegistrarAuditoriaAsync(string entidad, string? idEntidad, string accion, object detalle, Guid idUsuario)
+        {
+            try
+            {
+                await _auditoriaService.RegistrarAsync(entidad, idEntidad, accion, JsonSerializer.Serialize(detalle), idUsuario);
+            }
+            catch { }
         }
     }
 }

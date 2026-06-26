@@ -17,7 +17,7 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             var idUsuario = GetUserId();
             await _clientesService.CrearClienteAsync(clientesDTO, idUsuario);
-            return Ok("Cliente agregado con exito");
+            return Ok();
         }
 
         [HttpGet]
@@ -42,7 +42,7 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             var idUsuario = GetUserId();
             await _clientesService.ActualizarEstadoCliente(actualizarEstadoDTO, idUsuario);
-            return Ok("Estado del cliente actualizado con exito");
+            return Ok();
         }
 
         [HttpPut]
@@ -51,7 +51,7 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             var idUsuario = GetUserId();
             await _clientesService.ActualizarCliente(idCliente, clientesDTO, idUsuario);
-            return Ok("Cliente actualizado con exito");
+            return Ok();
         }
 
         [HttpGet]
@@ -68,7 +68,7 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             var idUsuario = GetUserId();
             await _clientesService.EliminarClienteAsync(idCliente, idUsuario);
-            return Ok("Cliente eliminado con exito");
+            return Ok();
         }
 
         /// <summary>

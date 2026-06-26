@@ -1,3 +1,5 @@
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.Entities;
@@ -9,10 +11,12 @@ using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 {
-    public class MateriaPrimaService(IGenericRepository<MateriaPrimaEntity, int> materiaPrima)
+    public class MateriaPrimaService(IGenericRepository<MateriaPrimaEntity, int> materiaPrima, IAuditoriaService auditoriaService)
     {
         private readonly IGenericRepository<MateriaPrimaEntity, int> _materiaPrima = materiaPrima;
-        public async Task CrearMateriaPrimaAsync(MateriaPrimaDTO materiaPrimaDTO)
+        private readonly IAuditoriaService _auditoriaService = auditoriaService;
+
+        public async Task CrearMateriaPrimaAsync(MateriaPrimaDTO materiaPrimaDTO, Guid idUsuario)
         {
             MateriaPrimaEntity materiaPrimaEntity = new()
             {
@@ -23,6 +27,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 Estado = 1
             };
             await _materiaPrima.CreateAsync(materiaPrimaEntity);
+            await RegistrarAuditoriaAsync("MateriaPrima", materiaPrimaEntity.Id.ToString(), "Crear", new { nombre = materiaPrimaEntity.Nombre, idCategoria = materiaPrimaEntity.IdCategoria }, idUsuario);
         }
 
         public async Task<List<MateriaPrimaEntity>> ObtenerMateriaPrimaAsync()
@@ -36,7 +41,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             return result;
         }
 
-        public async Task ActualizarEstadoMateriaPrima(MateriaPrimaActualizarEstadoDTO materiaPrimaActualizarEstadoDTO)
+        public async Task ActualizarEstadoMateriaPrima(MateriaPrimaActualizarEstadoDTO materiaPrimaActualizarEstadoDTO, Guid idUsuario)
         {
             var materiaPrima = await _materiaPrima.FindByIdAsync(materiaPrimaActualizarEstadoDTO.Id);
             if (materiaPrima != null)
@@ -44,6 +49,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 materiaPrima.Estado = materiaPrimaActualizarEstadoDTO.EstadoNuevo;
                 materiaPrima.FechaActualizacion = DateTime.Now;
                 await _materiaPrima.UpdateAsync(materiaPrima);
+                await RegistrarAuditoriaAsync("MateriaPrima", materiaPrima.Id.ToString(), "CambioEstado", new { estadoNuevo = materiaPrima.Estado }, idUsuario);
             }
             else
             {
@@ -51,7 +57,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             }
         }
 
-        public async Task ActualizarMateriaPrima(int idMateriPrima, MateriaPrimaDTO materiaPrimaDTO)
+        public async Task ActualizarMateriaPrima(int idMateriPrima, MateriaPrimaDTO materiaPrimaDTO, Guid idUsuario)
         {
             var materiaPrima = await _materiaPrima.FindByIdAsync(idMateriPrima);
             if (materiaPrima != null)
@@ -60,6 +66,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 materiaPrima.IdCategoria = materiaPrimaDTO.IdCategoria;
                 materiaPrima.FechaActualizacion = DateTime.Now;
                 await _materiaPrima.UpdateAsync(materiaPrima);
+                await RegistrarAuditoriaAsync("MateriaPrima", materiaPrima.Id.ToString(), "Modificar", new { nombre = materiaPrima.Nombre, idCategoria = materiaPrima.IdCategoria }, idUsuario);
             }
             else
             {
@@ -74,17 +81,27 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
         }
 
         // New: delete materia prima by id using generic repository
-        public async Task EliminarMateriaPrimaAsync(int idMateriaPrima)
+        public async Task EliminarMateriaPrimaAsync(int idMateriaPrima, Guid idUsuario)
         {
             var existente = await _materiaPrima.FindByIdAsync(idMateriaPrima);
             if (existente != null)
             {
                 await _materiaPrima.DeleteAsync(idMateriaPrima);
+                await RegistrarAuditoriaAsync("MateriaPrima", idMateriaPrima.ToString(), "Eliminar", new { nombre = existente.Nombre }, idUsuario);
             }
             else
             {
                 throw new Exception("La materia prima no existe");
             }
+        }
+
+        private async Task RegistrarAuditoriaAsync(string entidad, string? idEntidad, string accion, object detalle, Guid idUsuario)
+        {
+            try
+            {
+                await _auditoriaService.RegistrarAsync(entidad, idEntidad, accion, JsonSerializer.Serialize(detalle), idUsuario);
+            }
+            catch { }
         }
     }
 }

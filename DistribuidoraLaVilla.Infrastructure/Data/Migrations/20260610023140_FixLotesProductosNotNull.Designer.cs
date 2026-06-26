@@ -4,6 +4,7 @@ using DistribuidoraLaVilla.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20260610023140_FixLotesProductosNotNull")]
+    partial class FixLotesProductosNotNull
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -803,50 +806,6 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("movimientos_materia_prima");
-                });
-
-            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.PasivosEntity", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id_pasivo");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Descripcion")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
-                        .HasColumnName("descripcion");
-
-                    b.Property<int>("Estado")
-                        .HasColumnType("int")
-                        .HasColumnName("estado");
-
-                    b.Property<DateTime?>("FechaActualizacion")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_actualizacion");
-
-                    b.Property<DateTime>("FechaCreacion")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_creacion");
-
-                    b.Property<Guid?>("IdUsuario")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("id_usuario");
-
-                    b.Property<decimal>("Monto")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("monto");
-
-                    b.Property<string>("Nombre")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)")
-                        .HasColumnName("nombre");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("pasivos");
                 });
 
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Productos.CategoriasProductosEntity", b =>

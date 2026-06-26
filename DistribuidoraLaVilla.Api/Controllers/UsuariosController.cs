@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using DistribuidoraLaVilla.Application.Services;
 using DistribuidoraLaVilla.Domain.DTOS;
+using System.Security.Claims;
 
 namespace DistribuidoraLaVilla.Api.Controllers
 {
@@ -66,7 +67,7 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             try
             {
-                var usuario = await _usuariosService.CrearUsuarioAsync(dto);
+                var usuario = await _usuariosService.CrearUsuarioAsync(dto, GetUserId());
                 return Ok(new { success = true, message = "Usuario creado exitosamente", data = usuario });
             }
             catch (Exception ex)
@@ -81,7 +82,7 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             try
             {
-                var usuario = await _usuariosService.ActualizarUsuarioAsync(id, dto);
+                var usuario = await _usuariosService.ActualizarUsuarioAsync(id, dto, GetUserId());
                 return Ok(new { success = true, message = "Usuario actualizado exitosamente", data = usuario });
             }
             catch (Exception ex)
@@ -96,7 +97,7 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             try
             {
-                await _usuariosService.ActualizarEstadoUsuarioAsync(dto.Id, dto.EstadoNuevo);
+                await _usuariosService.ActualizarEstadoUsuarioAsync(dto.Id, dto.EstadoNuevo, GetUserId());
                 return Ok(new { success = true, message = "Estado del usuario actualizado exitosamente" });
             }
             catch (Exception ex)
@@ -111,13 +112,21 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             try
             {
-                await _usuariosService.EliminarUsuarioAsync(id);
+                await _usuariosService.EliminarUsuarioAsync(id, GetUserId());
                 return Ok(new { success = true, message = "Usuario eliminado exitosamente" });
             }
             catch (Exception ex)
             {
                 return BadRequest(new { success = false, message = ex.Message });
             }
+        }
+
+        private Guid GetUserId()
+        {
+            var nameIdentifier = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return !string.IsNullOrEmpty(nameIdentifier) && Guid.TryParse(nameIdentifier, out var userId)
+                ? userId
+                : Guid.Empty;
         }
     }
 }

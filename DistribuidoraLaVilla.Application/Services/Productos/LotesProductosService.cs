@@ -3,6 +3,7 @@ using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Domain.DTOS;
+using DistribuidoraLaVilla.Domain.DTOS.Productos;
 using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
 using DistribuidoraLaVilla.Domain.Enums;
@@ -17,10 +18,18 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
     public class LotesProductosService(
         IGenericRepository<LotesProductosEntity, int> lotesProductosRepository,
         IGenericRepository<MovimientosProductosEntity, int> movimientosProductosRepository,
+        IGenericRepository<ProductosEntity, int> productosRepository,
+        IGenericRepository<ProveedoresEntity, Guid> proveedoresRepository,
+        IGenericRepository<MarcasEntity, int> marcasRepository,
+        IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository,
         IAuditoriaService auditoriaService)
     {
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesProductosRepository = lotesProductosRepository;
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosProductosRepository = movimientosProductosRepository;
+        private readonly IGenericRepository<ProductosEntity, int> _productosRepository = productosRepository;
+        private readonly IGenericRepository<ProveedoresEntity, Guid> _proveedoresRepository = proveedoresRepository;
+        private readonly IGenericRepository<MarcasEntity, int> _marcasRepository = marcasRepository;
+        private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository = unidadMedidaRepository;
         private readonly IAuditoriaService _auditoriaService = auditoriaService;
 
         public async Task CrearLoteProductoAsync(LotesProductosDTO lotesProductosDTO)
@@ -84,15 +93,20 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             await _movimientosProductosRepository.CreateAsync(movimiento);
         }
 
-        public async Task<List<LotesProductosEntity>> ObtenerLotesProductosAsync()
+        public async Task<List<LotesProductosResponseDTO>> ObtenerLotesProductosAsync()
         {
-            return await _lotesProductosRepository.GetAllAsync();
+            var lotes = await _lotesProductosRepository.GetAllAsync();
+            return await MapearARespuestaAsync(lotes);
         }
 
-        public async Task<LotesProductosEntity> ObtenerLoteProductoPorIdAsync(int id)
+        public async Task<LotesProductosResponseDTO> ObtenerLoteProductoPorIdAsync(int id)
         {
             var lote = await _lotesProductosRepository.FindByIdAsync(id);
-            return lote ?? throw new Exception("El lote de producto no existe");
+            if (lote == null)
+                throw new Exception("El lote de producto no existe");
+
+            var resultado = await MapearARespuestaAsync([lote]);
+            return resultado.First();
         }
 
         public async Task ActualizarEstadoLoteProducto(ActualizarEstadoTipoIntDTO actualizarEstadoDTO)
@@ -185,10 +199,10 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             }
         }
 
-        public async Task<List<LotesProductosEntity>> ObtenerLotesProductosDisponiblesAsync()
+        public async Task<List<LotesProductosResponseDTO>> ObtenerLotesProductosDisponiblesAsync()
         {
             var lotes = await _lotesProductosRepository.GetAllAsync();
-            return [.. lotes.Where(l => l.Estado == 1)];
+            return await MapearARespuestaAsync([.. lotes.Where(l => l.Estado == 1)]);
         }
 
         public async Task EliminarLoteProductoAsync(int idLote, Guid idUsuario)
@@ -227,6 +241,43 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             {
                 throw new Exception("El lote de producto no existe");
             }
+        }
+
+        private async Task<List<LotesProductosResponseDTO>> MapearARespuestaAsync(List<LotesProductosEntity> lotes)
+        {
+            var productos = await _productosRepository.GetAllAsync();
+            var proveedores = await _proveedoresRepository.GetAllAsync();
+            var marcas = await _marcasRepository.GetAllAsync();
+            var unidades = await _unidadMedidaRepository.GetAllAsync();
+
+            var productosDict = productos.ToDictionary(p => p.Id);
+            var proveedoresDict = proveedores.ToDictionary(p => p.IdProveedor);
+            var marcasDict = marcas.ToDictionary(m => m.IdMarca);
+            var unidadesDict = unidades.ToDictionary(u => u.Id);
+
+            return lotes.Select(l => new LotesProductosResponseDTO
+            {
+                Id = l.Id,
+                IdProducto = l.IdProducto,
+                NombreProducto = productosDict.ContainsKey(l.IdProducto) ? productosDict[l.IdProducto].Nombre : "N/A",
+                IdProveedor = l.IdProveedor,
+                NombreProveedor = proveedoresDict.ContainsKey(l.IdProveedor) ? proveedoresDict[l.IdProveedor].Nombre : "N/A",
+                FechaEntrada = l.FechaEntrada,
+                FechaVencimiento = l.FechaVencimiento,
+                CantidadUnidades = l.CantidadUnidades,
+                PesoTotal = l.PesoTotal,
+                IdUnidadMedida = l.IdUnidadMedida,
+                NombreUnidadMedida = unidadesDict.ContainsKey(l.IdUnidadMedida) ? unidadesDict[l.IdUnidadMedida].Nombre : "N/A",
+                SimboloUnidadMedida = unidadesDict.ContainsKey(l.IdUnidadMedida) ? unidadesDict[l.IdUnidadMedida].Abreviatura : "N/A",
+                PrecioUnitario = l.PrecioUnitario,
+                PrecioKilo = l.PrecioKilo,
+                PrecioTotal = l.PrecioTotal,
+                IdMarca = l.IdMarca,
+                NombreMarca = marcasDict.ContainsKey(l.IdMarca) ? marcasDict[l.IdMarca].Nombre : "N/A",
+                CantidadInicial = l.CantidadInicial,
+                CantidadDisponible = l.CantidadDisponible,
+                Estado = l.Estado
+            }).ToList();
         }
 
         private static decimal CalculoPrecioTotal(int cantidadUnidades, decimal precioUnitario)

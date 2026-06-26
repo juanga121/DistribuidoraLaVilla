@@ -23,6 +23,7 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<CategoriasMateriaPrimaService>();
             services.AddScoped<MateriaPrimaService>();
             services.AddScoped<ProveedoresService>();
+            services.AddScoped<PasivosService>();
             services.AddScoped<MarcasService>();
             services.AddScoped<LotesMateriaPrimaService>();
             services.AddScoped<MovimientosMateriaPrimaService>();

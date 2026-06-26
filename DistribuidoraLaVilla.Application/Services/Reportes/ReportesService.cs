@@ -24,6 +24,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
         private readonly IGenericRepository<MovimientosMateriaPrimaEntity, int> _movMPRepo;
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movProdRepo;
         private readonly IGenericRepository<LotesMateriaPrimaEntity, int> _loteMPRepo;
+        private readonly IGenericRepository<PasivosEntity, int> _pasivosRepo;
 
         public ReportesService(
             IGenericRepository<FacturaEntity, int> facturaRepo,
@@ -38,7 +39,8 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             IGenericRepository<TipoFacturaEntity, int> tipoFacturaRepo,
             IGenericRepository<MovimientosMateriaPrimaEntity, int> movMPRepo,
             IGenericRepository<MovimientosProductosEntity, int> movProdRepo,
-            IGenericRepository<LotesMateriaPrimaEntity, int> loteMPRepo)
+            IGenericRepository<LotesMateriaPrimaEntity, int> loteMPRepo,
+            IGenericRepository<PasivosEntity, int> pasivosRepo)
         {
             _facturaRepo = facturaRepo;
             _detalleRepo = detalleRepo;
@@ -53,6 +55,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             _movMPRepo = movMPRepo;
             _movProdRepo = movProdRepo;
             _loteMPRepo = loteMPRepo;
+            _pasivosRepo = pasivosRepo;
         }
 
         // ──────────────────────────────────────────────
@@ -260,6 +263,9 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             var cuentasPorCobrarTotal = cxcItems.Sum(c => c.SaldoPendiente);
             var inventarioProductosTotal = productosTerminados.Sum(p => p.ValorTotal);
             var inventarioMateriaPrimaTotal = materiaPrima.Sum(m => m.ValorTotal);
+            var pasivosTotal = await _pasivosRepo.GetQueryable()
+                .Where(p => p.Estado == 1)
+                .SumAsync(p => p.Monto);
             var activosTotal = cuentasPorCobrarTotal + inventarioProductosTotal + inventarioMateriaPrimaTotal;
 
             return new BalanceMinimoReporteDTO
@@ -269,9 +275,9 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 InventarioProductosTotal = inventarioProductosTotal,
                 InventarioMateriaPrimaTotal = inventarioMateriaPrimaTotal,
                 ActivosTotal = activosTotal,
-                PasivosTotal = 0,
-                PatrimonioTotal = activosTotal,
-                PasivosNota = "Los pasivos no están modelados todavía en el sistema, por eso se muestran en cero.",
+                PasivosTotal = pasivosTotal,
+                PatrimonioTotal = activosTotal - pasivosTotal,
+                PasivosNota = "Los pasivos se calculan desde la tabla pasivos con registros activos.",
                 CuentasPorCobrar = cxcItems,
                 ProductosTerminados = productosTerminados,
                 MateriaPrima = materiaPrima

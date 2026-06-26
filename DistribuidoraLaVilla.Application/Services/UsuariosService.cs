@@ -4,6 +4,8 @@ using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Interfaces;
@@ -14,11 +16,13 @@ namespace DistribuidoraLaVilla.Application.Services
     {
         private readonly IGenericRepository<UsuariosEntity, Guid> _repository;
         private readonly IConfiguration _configuration;
+        private readonly IAuditoriaService _auditoriaService;
 
-        public UsuariosService(IGenericRepository<UsuariosEntity, Guid> repository, IConfiguration configuration)
+        public UsuariosService(IGenericRepository<UsuariosEntity, Guid> repository, IConfiguration configuration, IAuditoriaService auditoriaService)
         {
             _repository = repository;
             _configuration = configuration;
+            _auditoriaService = auditoriaService;
         }
 
         public async Task<LoginResponseDTO> LoginAsync(LoginDTO dto)
@@ -62,7 +66,7 @@ namespace DistribuidoraLaVilla.Application.Services
             return MapToResponse(usuario);
         }
 
-        public async Task<UsuarioResponseDTO> CrearUsuarioAsync(CrearUsuarioDTO dto)
+        public async Task<UsuarioResponseDTO> CrearUsuarioAsync(CrearUsuarioDTO dto, Guid idUsuario)
         {
             var emailExiste = _repository.GetByFilter(u => u.Email == dto.Email).Any();
 
@@ -85,11 +89,17 @@ namespace DistribuidoraLaVilla.Application.Services
             };
 
             await _repository.CreateAsync(usuario);
+            await RegistrarAuditoriaAsync("Usuario", usuario.Id.ToString(), "Crear", new
+            {
+                nombre = usuario.Nombre,
+                email = usuario.Email,
+                rol = usuario.Rol
+            }, idUsuario);
 
             return MapToResponse(usuario);
         }
 
-        public async Task<UsuarioResponseDTO> ActualizarUsuarioAsync(Guid id, ActualizarUsuarioDTO dto)
+        public async Task<UsuarioResponseDTO> ActualizarUsuarioAsync(Guid id, ActualizarUsuarioDTO dto, Guid idUsuario)
         {
             var usuario = await _repository.FindByIdAsync(id);
             if (usuario is null)
@@ -107,11 +117,17 @@ namespace DistribuidoraLaVilla.Application.Services
             usuario.Rol = dto.Rol;
 
             await _repository.UpdateAsync(usuario);
+            await RegistrarAuditoriaAsync("Usuario", usuario.Id.ToString(), "Modificar", new
+            {
+                nombre = usuario.Nombre,
+                email = usuario.Email,
+                rol = usuario.Rol
+            }, idUsuario);
 
             return MapToResponse(usuario);
         }
 
-        public async Task ActualizarEstadoUsuarioAsync(Guid id, int nuevoEstado)
+        public async Task ActualizarEstadoUsuarioAsync(Guid id, int nuevoEstado, Guid idUsuario)
         {
             var usuario = await _repository.FindByIdAsync(id);
             if (usuario is null)
@@ -119,16 +135,21 @@ namespace DistribuidoraLaVilla.Application.Services
 
             usuario.Estado = nuevoEstado;
             await _repository.UpdateAsync(usuario);
+            await RegistrarAuditoriaAsync("Usuario", usuario.Id.ToString(), "CambioEstado", new { estadoNuevo = nuevoEstado }, idUsuario);
         }
 
-        public async Task EliminarUsuarioAsync(Guid id)
+        public async Task EliminarUsuarioAsync(Guid id, Guid idUsuario)
         {
             var usuario = await _repository.FindByIdAsync(id);
             if (usuario is null)
                 throw new Exception("El usuario no existe");
 
-            usuario.Estado = 0;
-            await _repository.UpdateAsync(usuario);
+            await _repository.DeleteAsync(id);
+            await RegistrarAuditoriaAsync("Usuario", usuario.Id.ToString(), "Eliminar", new
+            {
+                nombre = usuario.Nombre,
+                email = usuario.Email
+            }, idUsuario);
         }
 
         private string GenerateJwtToken(UsuariosEntity user)
@@ -174,6 +195,15 @@ namespace DistribuidoraLaVilla.Application.Services
                 Rol = entity.Rol,
                 Estado = entity.Estado
             };
+        }
+
+        private async Task RegistrarAuditoriaAsync(string entidad, string? idEntidad, string accion, object detalle, Guid idUsuario)
+        {
+            try
+            {
+                await _auditoriaService.RegistrarAsync(entidad, idEntidad, accion, JsonSerializer.Serialize(detalle), idUsuario);
+            }
+            catch { }
         }
     }
 }

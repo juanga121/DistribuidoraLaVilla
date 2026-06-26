@@ -1,6 +1,7 @@
 using DistribuidoraLaVilla.Application.Services.Productos;
 using DistribuidoraLaVilla.Domain.DTOS;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace DistribuidoraLaVilla.Api.Controllers.Productos
 {
@@ -14,7 +15,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("CrearCategoria")]
         public async Task<IActionResult> CrearCategoria(CategoriasProductosDTO categoriasProductosDTO)
         {
-            await _categoriasProductosService.CrearCategoriaAsync(categoriasProductosDTO);
+            await _categoriasProductosService.CrearCategoriaAsync(categoriasProductosDTO, GetUserId());
             return Ok();
         }
 
@@ -32,7 +33,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         {
             try
             {
-                await _categoriasProductosService.ActualizarEstadoCategorias(actualizarEstadoDTO);
+                await _categoriasProductosService.ActualizarEstadoCategorias(actualizarEstadoDTO, GetUserId());
                 return Ok();
             }
             catch (Exception ex)
@@ -45,7 +46,7 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("ActualizarCategorias/{id}")]
         public async Task<IActionResult> ActualizarCategorias(int id, [FromBody] CategoriasProductosDTO categoriasProductosDTO)
         {
-            await _categoriasProductosService.ActualizarCategorias(id, categoriasProductosDTO);
+            await _categoriasProductosService.ActualizarCategorias(id, categoriasProductosDTO, GetUserId());
             return Ok();
         }
 
@@ -69,8 +70,16 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         [Route("EliminarCategoria/{idCategoria}")]
         public async Task<IActionResult> EliminarCategoria(int idCategoria)
         {
-            await _categoriasProductosService.EliminarCategoriaAsync(idCategoria);
+            await _categoriasProductosService.EliminarCategoriaAsync(idCategoria, GetUserId());
             return Ok();
+        }
+
+        private Guid GetUserId()
+        {
+            var nameIdentifier = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return !string.IsNullOrEmpty(nameIdentifier) && Guid.TryParse(nameIdentifier, out var userId)
+                ? userId
+                : Guid.Empty;
         }
     }
 }

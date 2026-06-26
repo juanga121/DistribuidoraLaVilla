@@ -1,3 +1,5 @@
+using System.Text.Json;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.Entities;
@@ -9,11 +11,12 @@ using System.Threading.Tasks;
 
 namespace DistribuidoraLaVilla.Application.Services
 {
-    public class ProveedoresService(IGenericRepository<ProveedoresEntity, Guid> proveedoresRepository)
+    public class ProveedoresService(IGenericRepository<ProveedoresEntity, Guid> proveedoresRepository, IAuditoriaService auditoriaService)
     {
         private readonly IGenericRepository<ProveedoresEntity, Guid> _proveedoresRepository = proveedoresRepository;
+        private readonly IAuditoriaService _auditoriaService = auditoriaService;
 
-        public async Task CrearProveedorAsync(ProveedoresDTO proveedoresDTO)
+        public async Task CrearProveedorAsync(ProveedoresDTO proveedoresDTO, Guid idUsuario)
         {
             ProveedoresEntity proveedoresEntity = new()
             {
@@ -28,6 +31,7 @@ namespace DistribuidoraLaVilla.Application.Services
             };
 
             await _proveedoresRepository.CreateAsync(proveedoresEntity);
+            await RegistrarAuditoriaAsync("Proveedor", proveedoresEntity.IdProveedor.ToString(), "Crear", new { nombre = proveedoresEntity.Nombre, email = proveedoresEntity.Email, tipoProveedor = proveedoresEntity.TipoProveedor }, idUsuario);
         }
         public async Task<List<ProveedoresEntity>> ObtenerProveedoresAsync()
         {
@@ -40,7 +44,7 @@ namespace DistribuidoraLaVilla.Application.Services
             return proveedor ?? throw new Exception("El proveedor no existe");
         }
 
-        public async Task ActualizarEstadoProveedor(ActualizarEstadoTipoGuidDTO actualizarEstadoDTO)
+        public async Task ActualizarEstadoProveedor(ActualizarEstadoTipoGuidDTO actualizarEstadoDTO, Guid idUsuario)
         {
             var proveedor = await _proveedoresRepository.FindByIdAsync(actualizarEstadoDTO.Id);
             if (proveedor != null)
@@ -48,6 +52,7 @@ namespace DistribuidoraLaVilla.Application.Services
                 proveedor.Estado = actualizarEstadoDTO.EstadoNuevo;
                 proveedor.FechaActualizacion = DateTime.Now;
                 await _proveedoresRepository.UpdateAsync(proveedor);
+                await RegistrarAuditoriaAsync("Proveedor", proveedor.IdProveedor.ToString(), "CambioEstado", new { estadoNuevo = proveedor.Estado }, idUsuario);
             }
             else
             {
@@ -55,7 +60,7 @@ namespace DistribuidoraLaVilla.Application.Services
             }
         }
 
-        public async Task ActualizarProveedor(Guid idProveedor, ProveedoresDTO proveedoresDTO)
+        public async Task ActualizarProveedor(Guid idProveedor, ProveedoresDTO proveedoresDTO, Guid idUsuario)
         {
             var proveedor = await _proveedoresRepository.FindByIdAsync(idProveedor);
             if (proveedor != null)
@@ -66,6 +71,7 @@ namespace DistribuidoraLaVilla.Application.Services
                 proveedor.TipoProveedor = proveedoresDTO.TipoProveedor;
                 proveedor.FechaActualizacion = DateTime.Now;
                 await _proveedoresRepository.UpdateAsync(proveedor);
+                await RegistrarAuditoriaAsync("Proveedor", proveedor.IdProveedor.ToString(), "Modificar", new { nombre = proveedor.Nombre, email = proveedor.Email, tipoProveedor = proveedor.TipoProveedor }, idUsuario);
             }
             else
             {
@@ -79,17 +85,27 @@ namespace DistribuidoraLaVilla.Application.Services
             return proveedoresDisponibles;
         }
 
-        public async Task EliminarProveedorAsync(Guid idProveedor)
+        public async Task EliminarProveedorAsync(Guid idProveedor, Guid idUsuario)
         {
             var existente = await _proveedoresRepository.FindByIdAsync(idProveedor);
             if (existente != null)
             {
                 await _proveedoresRepository.DeleteAsync(idProveedor);
+                await RegistrarAuditoriaAsync("Proveedor", idProveedor.ToString(), "Eliminar", new { nombre = existente.Nombre }, idUsuario);
             }
             else
             {
                 throw new Exception("El proveedor no existe");
             }
+        }
+
+        private async Task RegistrarAuditoriaAsync(string entidad, string? idEntidad, string accion, object detalle, Guid idUsuario)
+        {
+            try
+            {
+                await _auditoriaService.RegistrarAsync(entidad, idEntidad, accion, JsonSerializer.Serialize(detalle), idUsuario);
+            }
+            catch { }
         }
     }
 }

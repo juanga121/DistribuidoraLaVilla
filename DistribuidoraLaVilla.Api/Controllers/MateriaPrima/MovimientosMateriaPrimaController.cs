@@ -1,4 +1,6 @@
+using DistribuidoraLaVilla.Application.Common;
 using DistribuidoraLaVilla.Application.Services.MateriaPrima;
+using DistribuidoraLaVilla.Domain.DTOS;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
@@ -117,16 +119,45 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [ProducesResponseType(200)]
         public IActionResult ObtenerTiposMovimiento()
         {
-            var tipos = new[]
+            var tipos = new List<TipoMovimientoDTO>
             {
-                new { Id = 1, Nombre = "Entrada", Descripcion = "Entrada de materia prima al inventario" },
-                new { Id = 2, Nombre = "Consumo", Descripcion = "Consumo de materia prima en producción" },
-                new { Id = 3, Nombre = "Ajuste", Descripcion = "Ajuste de inventario (establece cantidad exacta)" },
-                new { Id = 4, Nombre = "Devolución", Descripcion = "Devolución de materia prima al inventario" },
-                new { Id = 5, Nombre = "Vencimiento", Descripcion = "Baja por vencimiento de materia prima" }
+                new() { Id = 1, Nombre = "Entrada", Descripcion = "Entrada de materia prima al inventario" },
+                new() { Id = 2, Nombre = "Consumo", Descripcion = "Consumo de materia prima en producción" },
+                new() { Id = 3, Nombre = "Ajuste", Descripcion = "Ajuste de inventario (establece cantidad exacta)" },
+                new() { Id = 4, Nombre = "Devolución", Descripcion = "Devolución de materia prima al inventario" },
+                new() { Id = 5, Nombre = "Vencimiento", Descripcion = "Baja por vencimiento de materia prima" }
             };
 
-            return Ok(tipos);
+            return Ok(ApiResponse<List<TipoMovimientoDTO>>.Ok(tipos));
+        }
+
+        [HttpPost]
+        [Route("CrearMovimiento")]
+        [ProducesResponseType(201)]
+        [ProducesResponseType(400)]
+        public async Task<IActionResult> CrearMovimiento([FromBody] MovimientoMateriaPrimaDTO dto)
+        {
+            if (!ModelState.IsValid)
+            {
+                var errores = ModelState.Values
+                    .SelectMany(v => v.Errors)
+                    .Select(e => e.ErrorMessage);
+                return BadRequest(ApiResponse<object>.Fail(string.Join("; ", errores)));
+            }
+
+            try
+            {
+                var result = await _movimientosService.CrearMovimientoMateriaPrimaAsync(dto);
+
+                if (!result.Success)
+                    return BadRequest(result);
+
+                return CreatedAtAction(nameof(ObtenerMovimientoPorId), new { id = result.Data!.Id }, result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, ApiResponse<object>.Fail($"Error interno al crear movimiento: {ex.Message}"));
+            }
         }
     }
 }

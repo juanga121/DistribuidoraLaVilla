@@ -20,7 +20,8 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
         IGenericRepository<MateriaPrimaEntity, int> materiaPrimaRepository,
         IGenericRepository<ProveedoresEntity, Guid> proveedoresRepository,
         IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository,
-        IAuditoriaService auditoriaService)
+        IAuditoriaService auditoriaService,
+        IUnitOfWork unitOfWork)
     {
         private readonly IGenericRepository<LotesMateriaPrimaEntity, int> _lotesMateriaPrimaRepository = lotesMateriaPrimaRepository;
         private readonly IGenericRepository<MovimientosMateriaPrimaEntity, int> _movimientosMateriaPrimaRepository = movimientosMateriaPrimaRepository;
@@ -29,10 +30,11 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
         private readonly IGenericRepository<ProveedoresEntity, Guid> _proveedoresRepository = proveedoresRepository;
         private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository = unidadMedidaRepository;
         private readonly IAuditoriaService _auditoriaService = auditoriaService;
+        private readonly IUnitOfWork _unitOfWork = unitOfWork;
 
         public async Task CrearLoteMateriaPrimaAsync(LotesMateriaPrimaDTO lotesMateriaPrimaDTO)
         {
-            // Validación
+            // Validación (fuera de tx — no modifica estado)
             var validator = new LotesMateriaPrimaDTOValidator();
             var validationResult = await validator.ValidateAsync(lotesMateriaPrimaDTO);
 
@@ -43,49 +45,65 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 
             var CostoTotal = CalculoCostoTotal(lotesMateriaPrimaDTO.Cantidad, lotesMateriaPrimaDTO.CostoUnitario);
 
-            LotesMateriaPrimaEntity entity = new()
-            {
-                IdMarca = lotesMateriaPrimaDTO.IdMarca,
-                IdMateria = lotesMateriaPrimaDTO.IdMateria,
-                IdProveedor = lotesMateriaPrimaDTO.IdProveedor,
-                FechaEntrada = DateTime.Now,
-                FechaVencimiento = lotesMateriaPrimaDTO.FechaVencimiento,
-                Cantidad = lotesMateriaPrimaDTO.Cantidad,
-                IdUnidadMedida = lotesMateriaPrimaDTO.IdUnidadMedida,
-                CostoUnitario = lotesMateriaPrimaDTO.CostoUnitario,
-                CostoTotal = CostoTotal,
-                CantidadInicial = lotesMateriaPrimaDTO.Cantidad,
-                CantidadDisponible = lotesMateriaPrimaDTO.Cantidad,
-                Estado = 1
-            };
-            await _lotesMateriaPrimaRepository.CreateAsync(entity);
-
+            await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var detalle = JsonSerializer.Serialize(new
+                LotesMateriaPrimaEntity entity = new()
                 {
-                    idMateria = entity.IdMateria,
-                    cantidad = entity.Cantidad,
-                    costoUnitario = entity.CostoUnitario,
-                    costoTotal = CostoTotal,
-                    proveedor = entity.IdProveedor
-                });
-                await _auditoriaService.RegistrarAsync("StockMP", entity.Id.ToString(), "CrearLote", detalle, lotesMateriaPrimaDTO.IdUsuario);
-            }
-            catch { /* fire-and-forget */ }
+                    IdMarca = lotesMateriaPrimaDTO.IdMarca,
+                    IdMateria = lotesMateriaPrimaDTO.IdMateria,
+                    IdProveedor = lotesMateriaPrimaDTO.IdProveedor,
+                    FechaEntrada = DateTime.Now,
+                    FechaVencimiento = lotesMateriaPrimaDTO.FechaVencimiento,
+                    Cantidad = lotesMateriaPrimaDTO.Cantidad,
+                    IdUnidadMedida = lotesMateriaPrimaDTO.IdUnidadMedida,
+                    CostoUnitario = lotesMateriaPrimaDTO.CostoUnitario,
+                    CostoTotal = CostoTotal,
+                    CantidadInicial = lotesMateriaPrimaDTO.Cantidad,
+                    CantidadDisponible = lotesMateriaPrimaDTO.Cantidad,
+                    Estado = 1
+                };
+                await _lotesMateriaPrimaRepository.CreateAsync(entity);
 
-            // Auto-generar movimiento de entrada: si falla, que el error sea visible
-            var movimiento = new MovimientosMateriaPrimaEntity
+                // Auditoría: fire-and-forget (no debe romper la tx si falla)
+                try
+                {
+                    var detalle = JsonSerializer.Serialize(new
+                    {
+                        idMateria = entity.IdMateria,
+                        cantidad = entity.Cantidad,
+                        costoUnitario = entity.CostoUnitario,
+                        costoTotal = CostoTotal,
+                        proveedor = entity.IdProveedor
+                    });
+                    await _auditoriaService.RegistrarAsync("StockMP", entity.Id.ToString(), "CrearLote", detalle, lotesMateriaPrimaDTO.IdUsuario);
+                }
+                catch { /* fire-and-forget */ }
+
+                // Auto-generar movimiento de entrada (misma tx)
+                var movimiento = new MovimientosMateriaPrimaEntity
+                {
+                    IdLoteMateria = entity.Id,
+                    IdTipoMovimiento = (int)TipoMovimientoMateriaPrima.Entrada,
+                    Fecha = DateTime.Now,
+                    Cantidad = lotesMateriaPrimaDTO.Cantidad,
+                    IdUnidadMedida = lotesMateriaPrimaDTO.IdUnidadMedida,
+                    IdUsuario = lotesMateriaPrimaDTO.IdUsuario,
+                    Observacion = $"Ingreso de lote - {lotesMateriaPrimaDTO.Cantidad} unidades"
+                };
+                await _movimientosMateriaPrimaRepository.CreateAsync(movimiento);
+
+                await _unitOfWork.CommitAsync();
+            }
+            catch
             {
-                IdLoteMateria = entity.Id,
-                IdTipoMovimiento = (int)TipoMovimientoMateriaPrima.Entrada,
-                Fecha = DateTime.Now,
-                Cantidad = lotesMateriaPrimaDTO.Cantidad,
-                IdUnidadMedida = lotesMateriaPrimaDTO.IdUnidadMedida,
-                IdUsuario = lotesMateriaPrimaDTO.IdUsuario,
-                Observacion = $"Ingreso de lote - {lotesMateriaPrimaDTO.Cantidad} unidades"
-            };
-            await _movimientosMateriaPrimaRepository.CreateAsync(movimiento);
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                await _unitOfWork.DisposeAsync();
+            }
         }
 
         public async Task<List<LotesMateriaPrimaEntity>> ObtenerLotesMateriaPrimaAsync()
@@ -187,7 +205,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 
         public async Task ActualizarLoteMateriaPrima(int id, LotesMateriaPrimaDTO lotesMateriaPrimaDTO)
         {
-            // Validación
+            // Validación (fuera de tx — no modifica estado)
             var validator = new LotesMateriaPrimaDTOValidator();
             var validationResult = await validator.ValidateAsync(lotesMateriaPrimaDTO);
 
@@ -196,36 +214,75 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 throw new ValidationException(validationResult.Errors);
             }
 
-            var lote = await _lotesMateriaPrimaRepository.FindByIdAsync(id);
-            if (lote != null)
+            await _unitOfWork.BeginTransactionAsync();
+            try
             {
-                // Calculamos la diferencia para ajustar CantidadDisponible
-                var diferenciaCantidad = lotesMateriaPrimaDTO.Cantidad - lote.Cantidad;
-
-                lote.IdMarca = lotesMateriaPrimaDTO.IdMarca;
-                lote.IdMateria = lotesMateriaPrimaDTO.IdMateria;
-                lote.IdProveedor = lotesMateriaPrimaDTO.IdProveedor;
-                lote.FechaEntrada = DateTime.Now;
-                lote.FechaVencimiento = lotesMateriaPrimaDTO.FechaVencimiento;
-                lote.Cantidad = lotesMateriaPrimaDTO.Cantidad;
-                lote.IdUnidadMedida = lotesMateriaPrimaDTO.IdUnidadMedida;
-                lote.CostoUnitario = lotesMateriaPrimaDTO.CostoUnitario;
-                lote.CostoTotal = CalculoCostoTotal(lotesMateriaPrimaDTO.Cantidad, lotesMateriaPrimaDTO.CostoUnitario);
-                lote.CantidadInicial = lotesMateriaPrimaDTO.Cantidad;
-                lote.CantidadDisponible += diferenciaCantidad;
-                await _lotesMateriaPrimaRepository.UpdateAsync(lote);
-
-                try
+                var lote = await _lotesMateriaPrimaRepository.FindByIdAsync(id);
+                if (lote != null)
                 {
-                    var detalle = JsonSerializer.Serialize(new
+                    // Guardar cantidad anterior ANTES de modificar
+                    var cantidadAnterior = lote.Cantidad;
+
+                    // Calculamos la diferencia para ajustar CantidadDisponible
+                    var diferenciaCantidad = lotesMateriaPrimaDTO.Cantidad - cantidadAnterior;
+
+                    lote.IdMarca = lotesMateriaPrimaDTO.IdMarca;
+                    lote.IdMateria = lotesMateriaPrimaDTO.IdMateria;
+                    lote.IdProveedor = lotesMateriaPrimaDTO.IdProveedor;
+                    lote.FechaEntrada = DateTime.Now;
+                    lote.FechaVencimiento = lotesMateriaPrimaDTO.FechaVencimiento;
+                    lote.Cantidad = lotesMateriaPrimaDTO.Cantidad;
+                    lote.IdUnidadMedida = lotesMateriaPrimaDTO.IdUnidadMedida;
+                    lote.CostoUnitario = lotesMateriaPrimaDTO.CostoUnitario;
+                    lote.CostoTotal = CalculoCostoTotal(lotesMateriaPrimaDTO.Cantidad, lotesMateriaPrimaDTO.CostoUnitario);
+                    lote.CantidadInicial = lotesMateriaPrimaDTO.Cantidad;
+                    lote.CantidadDisponible += diferenciaCantidad;
+                    await _lotesMateriaPrimaRepository.UpdateAsync(lote);
+
+                    // Si la cantidad cambió, crear movimiento de ajuste (REQ-AL-01)
+                    if (diferenciaCantidad != 0)
                     {
-                        cantidad = lotesMateriaPrimaDTO.Cantidad,
-                        costoUnitario = lotesMateriaPrimaDTO.CostoUnitario,
-                        diferenciaCantidad
-                    });
-                    await _auditoriaService.RegistrarAsync("StockMP", id.ToString(), "Modificar", detalle, lotesMateriaPrimaDTO.IdUsuario);
+                        var movimientoAjuste = new MovimientosMateriaPrimaEntity
+                        {
+                            IdLoteMateria = lote.Id,
+                            IdTipoMovimiento = (int)TipoMovimientoMateriaPrima.Ajuste,
+                            Fecha = DateTime.Now,
+                            Cantidad = diferenciaCantidad,
+                            IdUnidadMedida = lotesMateriaPrimaDTO.IdUnidadMedida,
+                            IdUsuario = lotesMateriaPrimaDTO.IdUsuario,
+                            Observacion = $"Ajuste por actualización de lote: {cantidadAnterior} → {lotesMateriaPrimaDTO.Cantidad} (diferencia: {diferenciaCantidad})"
+                        };
+                        await _movimientosMateriaPrimaRepository.CreateAsync(movimientoAjuste);
+                    }
+
+                    // Auditoría: fire-and-forget (no debe romper la tx si falla)
+                    try
+                    {
+                        var detalle = JsonSerializer.Serialize(new
+                        {
+                            cantidad = lotesMateriaPrimaDTO.Cantidad,
+                            costoUnitario = lotesMateriaPrimaDTO.CostoUnitario,
+                            diferenciaCantidad
+                        });
+                        await _auditoriaService.RegistrarAsync("StockMP", id.ToString(), "Modificar", detalle, lotesMateriaPrimaDTO.IdUsuario);
+                    }
+                    catch { /* fire-and-forget */ }
                 }
-                catch { /* fire-and-forget */ }
+                else
+                {
+                    throw new Exception("El lote de materia prima no existe");
+                }
+
+                await _unitOfWork.CommitAsync();
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                await _unitOfWork.DisposeAsync();
             }
         }
 

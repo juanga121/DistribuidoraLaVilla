@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Caja;
@@ -17,6 +18,7 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
         private readonly IGenericRepository<FacturaEntity, int> _facturaRepo;
         private readonly IGenericRepository<PagoCuentaEntity, int> _pagoRepo;
         private readonly IGenericRepository<ReciboEntity, int> _reciboRepo;
+        private readonly IAuditoriaService _auditoriaService;
         private readonly IUnitOfWork _unitOfWork;
 
         public CajaService(
@@ -26,6 +28,7 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             IGenericRepository<FacturaEntity, int> facturaRepo,
             IGenericRepository<PagoCuentaEntity, int> pagoRepo,
             IGenericRepository<ReciboEntity, int> reciboRepo,
+            IAuditoriaService auditoriaService,
             IUnitOfWork unitOfWork)
         {
             _aperturaRepo = aperturaRepo;
@@ -34,6 +37,7 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             _facturaRepo = facturaRepo;
             _pagoRepo = pagoRepo;
             _reciboRepo = reciboRepo;
+            _auditoriaService = auditoriaService;
             _unitOfWork = unitOfWork;
         }
 
@@ -69,6 +73,11 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
                 await _aperturaRepo.CreateAsync(entity);
                 await _unitOfWork.CommitAsync();
 
+                await RegistrarAuditoriaAsync("Caja", entity.Id.ToString(), "AbrirCaja", new
+                {
+                    montoInicial = entity.MontoInicial
+                }, dto.IdUsuario);
+
                 return await MapCajaAperturaAsync(entity);
             }
             catch
@@ -99,6 +108,15 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
 
                 await _aperturaRepo.UpdateAsync(caja);
                 await _unitOfWork.CommitAsync();
+
+                await RegistrarAuditoriaAsync("Caja", caja.Id.ToString(), "CerrarCaja", new
+                {
+                    montoFinal = dto.MontoFinal,
+                    esperado,
+                    ingresos = resumen.Ingresos,
+                    egresos = resumen.Egresos,
+                    diferencia = caja.Diferencia
+                }, dto.IdUsuario);
 
                 var result = await MapCajaAperturaAsync(caja);
                 return new CajaCierreDTO
@@ -154,6 +172,12 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
                 await _movimientoRepo.CreateAsync(movimiento);
                 await _unitOfWork.CommitAsync();
 
+                await RegistrarAuditoriaAsync("Caja", movimiento.Id.ToString(), "RegistrarEgreso", new
+                {
+                    concepto = movimiento.Concepto,
+                    monto = movimiento.Monto
+                }, dto.IdUsuario);
+
                 return await MapMovimientoAsync(movimiento);
             }
             catch
@@ -189,6 +213,13 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             };
 
             await _movimientoRepo.CreateAsync(movimiento);
+            await RegistrarAuditoriaAsync("Caja", movimiento.Id.ToString(), "RegistrarIngresoContado", new
+            {
+                idFactura,
+                monto,
+                numeroFactura,
+                metodoPago
+            }, idUsuario);
             return await MapMovimientoAsync(movimiento);
         }
 
@@ -225,6 +256,15 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             };
 
             await _movimientoRepo.CreateAsync(movimiento);
+            await RegistrarAuditoriaAsync("Caja", movimiento.Id.ToString(), "RegistrarPagoCxc", new
+            {
+                idPago,
+                idRecibo,
+                monto,
+                numeroRecibo,
+                numeroFactura,
+                metodoPago
+            }, idUsuario);
             return await MapMovimientoAsync(movimiento);
         }
 
@@ -401,6 +441,15 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
                     },
                     g => g.Sum(m => m.Monto)
                 );
+        }
+
+        private async Task RegistrarAuditoriaAsync(string entidad, string? idEntidad, string accion, object detalle, Guid idUsuario)
+        {
+            try
+            {
+                await _auditoriaService.RegistrarAsync(entidad, idEntidad, accion, JsonSerializer.Serialize(detalle), idUsuario);
+            }
+            catch { }
         }
     }
 }

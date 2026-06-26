@@ -13,6 +13,10 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
             _dataContext = dataContext;
         }
 
+        /// <inheritdoc/>
+        public bool HasActiveTransaction => _transaction != null;
+
+        /// <inheritdoc/>
         public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
         {
             _transaction = await _dataContext.Database.BeginTransactionAsync(cancellationToken);

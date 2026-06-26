@@ -1,6 +1,7 @@
 ﻿using DistribuidoraLaVilla.Application.Services;
 using DistribuidoraLaVilla.Domain.DTOS;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace DistribuidoraLaVilla.Api.Controllers
 {
@@ -14,8 +15,8 @@ namespace DistribuidoraLaVilla.Api.Controllers
         [Route("CrearProveedor")]
         public async Task<IActionResult> CrearProveedor([FromBody] ProveedoresDTO proveedoresDTO)
         {
-            await _proveedoresService.CrearProveedorAsync(proveedoresDTO);
-            return Ok("Proveedor agregado con exito");
+            await _proveedoresService.CrearProveedorAsync(proveedoresDTO, GetUserId());
+            return Ok();
         }
 
         [HttpGet]
@@ -38,16 +39,16 @@ namespace DistribuidoraLaVilla.Api.Controllers
         [Route("ActualizarEstadoProveedor")]
         public async Task<IActionResult> ActualizarEstadoProveedor([FromBody] ActualizarEstadoTipoGuidDTO actualizarEstadoDTO)
         {
-            await _proveedoresService.ActualizarEstadoProveedor(actualizarEstadoDTO);
-            return Ok("Estado del proveedor actualizado con exito");
+            await _proveedoresService.ActualizarEstadoProveedor(actualizarEstadoDTO, GetUserId());
+            return Ok();
         }
 
         [HttpPut]
         [Route("ActualizarProveedor/{idProveedor:guid}")]
         public async Task<IActionResult> ActualizarProveedor(Guid idProveedor, [FromBody] ProveedoresDTO proveedoresDTO)
         {
-            await _proveedoresService.ActualizarProveedor(idProveedor, proveedoresDTO);
-            return Ok("Proveedor actualizado con exito");
+            await _proveedoresService.ActualizarProveedor(idProveedor, proveedoresDTO, GetUserId());
+            return Ok();
         }
 
         [HttpGet]
@@ -62,8 +63,16 @@ namespace DistribuidoraLaVilla.Api.Controllers
         [Route("EliminarProveedor/{idProveedor}")]
         public async Task<IActionResult> EliminarProveedor(Guid idProveedor)
         {
-            await _proveedoresService.EliminarProveedorAsync(idProveedor);
-            return Ok("Proveedor eliminado con exito");
+            await _proveedoresService.EliminarProveedorAsync(idProveedor, GetUserId());
+            return Ok();
+        }
+
+        private Guid GetUserId()
+        {
+            var nameIdentifier = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return !string.IsNullOrEmpty(nameIdentifier) && Guid.TryParse(nameIdentifier, out var userId)
+                ? userId
+                : Guid.Empty;
         }
     }
 }
