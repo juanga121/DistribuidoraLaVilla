@@ -9,10 +9,30 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Reportes
         public decimal ActivosTotal { get; set; }
         public decimal PasivosTotal { get; set; }
         public decimal PatrimonioTotal { get; set; }
+        public string ActivosNota { get; set; } = string.Empty;
         public string PasivosNota { get; set; } = string.Empty;
+        public string PatrimonioNota { get; set; } = string.Empty;
         public List<BalanceCxcItemDTO> CuentasPorCobrar { get; set; } = new();
         public List<BalanceProductoItemDTO> ProductosTerminados { get; set; } = new();
         public List<BalanceMateriaPrimaItemDTO> MateriaPrima { get; set; } = new();
+        public List<BalanceActivoItemDTO> Activos { get; set; } = new();
+        public List<BalancePatrimonioItemDTO> Patrimonios { get; set; } = new();
+    }
+
+    public class BalanceActivoItemDTO
+    {
+        public int IdActivo { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string? Descripcion { get; set; }
+        public decimal Monto { get; set; }
+    }
+
+    public class BalancePatrimonioItemDTO
+    {
+        public int IdPatrimonio { get; set; }
+        public string Nombre { get; set; } = string.Empty;
+        public string? Descripcion { get; set; }
+        public decimal Monto { get; set; }
     }
 
     public class BalanceCxcItemDTO

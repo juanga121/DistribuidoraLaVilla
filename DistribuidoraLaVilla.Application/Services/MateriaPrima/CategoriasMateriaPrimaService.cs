@@ -72,6 +72,10 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 await _categoriasMateriaPrima.UpdateAsync(categoriaMateriaPrima);
                 await RegistrarAuditoriaAsync("CategoriaMateriaPrima", categoriaMateriaPrima.Id.ToString(), "Modificar", new { nombre = categoriaMateriaPrima.Nombre, descripcion = categoriaMateriaPrima.Descripcion }, idUsuario);
             }
+            else
+            {
+                throw new Exception("La categoria de materia prima no existe");
+            }
         }
 
         public async Task<CategoriaMateriaPrimaEntity> ObtenerPorIdCategoria(int idCategoria)

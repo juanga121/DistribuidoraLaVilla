@@ -97,8 +97,12 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 };
             }
 
-            // Calcular total de la factura
-            decimal totalFactura = 0;
+            // ── Validar productos y calcular total estimado para crédito ──
+            // NOTA: Este es un cálculo estimado (Cantidad × Precio del DTO).
+            // El total REAL se calcula en CrearFacturaBaseAsync usando la cantidad
+            // realmente consumida del inventario (FIFO). Esta validación es un guard
+            // contra el límite de crédito, no el monto final.
+            decimal totalEstimado = 0;
             foreach (var detalle in solicitud.Detalles)
             {
                 var producto = await _productoRepository.FindByIdAsync(detalle.IdProducto);
@@ -110,7 +114,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         Mensaje = $"No se encontró el producto con ID {detalle.IdProducto}"
                     };
                 }
-                totalFactura += detalle.Cantidad * detalle.Precio;
+                totalEstimado += detalle.Cantidad * detalle.Precio;
             }
 
             // Calcular crédito disponible
@@ -122,7 +126,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             var creditoDisponible = cliente.LimiteCredito.Value - saldoPendienteTotal;
 
             // BR-02: Total no debe exceder límite disponible
-            if (totalFactura > creditoDisponible)
+            if (totalEstimado > creditoDisponible)
             {
                 return new FacturaResponseDTO
                 {

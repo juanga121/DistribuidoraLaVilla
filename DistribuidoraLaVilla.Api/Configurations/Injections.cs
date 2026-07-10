@@ -2,6 +2,7 @@
 using DistribuidoraLaVilla.Application.Services;
 using DistribuidoraLaVilla.Application.Services.Auditoria;
 using DistribuidoraLaVilla.Application.Services.Caja;
+using DistribuidoraLaVilla.Application.Services.Compras;
 using DistribuidoraLaVilla.Application.Services.CxC;
 using DistribuidoraLaVilla.Application.Services.Facturacion;
 using DistribuidoraLaVilla.Application.Services.Inventario;
@@ -24,6 +25,8 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<MateriaPrimaService>();
             services.AddScoped<ProveedoresService>();
             services.AddScoped<PasivosService>();
+            services.AddScoped<ActivosService>();
+            services.AddScoped<PatrimonioService>();
             services.AddScoped<MarcasService>();
             services.AddScoped<LotesMateriaPrimaService>();
             services.AddScoped<MovimientosMateriaPrimaService>();
@@ -38,6 +41,7 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<UsuariosService>();
             services.AddScoped<ClientesService>();
             services.AddScoped<FacturaService>();
+            services.AddScoped<OrdenCompraService>();
             services.AddScoped<ICuentasCobrarService, CuentasCobrarService>();
             services.AddScoped<IInventarioService, InventarioService>();
             services.AddScoped<IReportesService, ReportesService>();

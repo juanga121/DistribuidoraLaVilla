@@ -10,8 +10,17 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Reportes
         public CxcResumenDTO CxcVencido { get; set; } = new();
         public List<StockBajoDTO> StockBajo { get; set; } = new();
         public List<FacturaResumenDTO> UltimasFacturas { get; set; } = new();
+        public List<string> Alertas { get; set; } = new();
+        public VentasPeriodoDTO VentasContado { get; set; } = new();
+        public VentasPeriodoDTO VentasCredito { get; set; } = new();
+        public List<StockBajoCategoriaDTO> StockBajoPorCategoria { get; set; } = new();
+    }
 
-
+    public class StockBajoCategoriaDTO
+    {
+        public int IdCategoria { get; set; }
+        public string CategoriaNombre { get; set; } = string.Empty;
+        public int ProductosBajos { get; set; }
     }
 
     public class VentasPeriodoDTO

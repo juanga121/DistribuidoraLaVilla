@@ -38,7 +38,9 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
             }
             catch (Exception ex)
             {
-                return BadRequest(ex.Message);
+                if (ex.Message.Contains("no existe", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { mensaje = ex.Message });
+                return BadRequest(new { mensaje = ex.Message });
             }
         }
 
@@ -46,16 +48,34 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("ActualizarCategorias/{id}")]
         public async Task<IActionResult> ActualizarCategorias(int id, [FromBody]CategoriasMateriaPrimaDTO categoriasMateriaPrimaDTO)
         {
-            await _categoriasMateriaPrimaService.ActualizarCategorias(id, categoriasMateriaPrimaDTO, GetUserId());
-            return Ok();
+            try
+            {
+                await _categoriasMateriaPrimaService.ActualizarCategorias(id, categoriasMateriaPrimaDTO, GetUserId());
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("no existe", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { mensaje = ex.Message });
+                throw;
+            }
         }
 
         [HttpGet]
         [Route("ObtenerCategoriaPorId/{idCategoria}")]
         public async Task<IActionResult> ObtenerCategoriaPorId(int idCategoria)
         {
-            var categoria = await _categoriasMateriaPrimaService.ObtenerPorIdCategoria(idCategoria);
-            return Ok(categoria);
+            try
+            {
+                var categoria = await _categoriasMateriaPrimaService.ObtenerPorIdCategoria(idCategoria);
+                return Ok(categoria);
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("no existe", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("no se encontro", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { mensaje = ex.Message });
+                throw;
+            }
         }
 
         [HttpGet]
@@ -70,8 +90,17 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("EliminarCategoria/{idCategoria}")]
         public async Task<IActionResult> EliminarCategoria(int idCategoria)
         {
-            await _categoriasMateriaPrimaService.EliminarCategoriaAsync(idCategoria, GetUserId());
-            return Ok();
+            try
+            {
+                await _categoriasMateriaPrimaService.EliminarCategoriaAsync(idCategoria, GetUserId());
+                return Ok(new { mensaje = "Categoría eliminada correctamente" });
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("no existe", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { mensaje = ex.Message });
+                throw;
+            }
         }
 
         private Guid GetUserId()

@@ -70,7 +70,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             }
             else
             {
-                throw new Exception("Error al actualizar la materia prima");
+                throw new Exception("La materia prima no existe");
             }
         }
         public async Task<List<MateriaPrimaEntity>> ObtenerMateriaPrimaDisponible()

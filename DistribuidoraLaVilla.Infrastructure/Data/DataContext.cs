@@ -3,6 +3,7 @@ using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Facturacion;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
+using DistribuidoraLaVilla.Domain.Entities.Compras;
 
 namespace DistribuidoraLaVilla.Infrastructure.Data
 {
@@ -17,6 +18,8 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
         public DbSet<CategoriaMateriaPrimaEntity> CategoriasMateriaPrima { get; set; }
         public DbSet<ProveedoresEntity> Proveedores { get; set; }
         public DbSet<PasivosEntity> Pasivos { get; set; }
+        public DbSet<ActivosEntity> Activos { get; set; }
+        public DbSet<PatrimonioEntity> Patrimonio { get; set; }
         public DbSet<CategoriasProductosEntity> CategoriasProductos { get; set; }
         public DbSet<ProductosEntity> Productos { get; set; }
         public DbSet<LotesProductosEntity> LotesProductos { get; set; }
@@ -38,6 +41,10 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
         public DbSet<PagoCuentaEntity> PagosCuenta { get; set; }
         public DbSet<EstadoFacturaEntity> EstadosFactura { get; set; }
         public DbSet<TipoFacturaEntity> TiposFactura { get; set; }
+
+        // ── Compras ──
+        public DbSet<OrdenCompraEntity> OrdenesCompra { get; set; }
+        public DbSet<DetalleCompraEntity> DetallesCompra { get; set; }
 
         // ── Movimientos generales (productos terminados) ──
         public DbSet<MovimientoEntity> Movimientos { get; set; }

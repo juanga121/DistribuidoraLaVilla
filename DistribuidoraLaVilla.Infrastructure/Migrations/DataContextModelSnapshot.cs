@@ -4,19 +4,16 @@ using DistribuidoraLaVilla.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
+namespace DistribuidoraLaVilla.Infrastructure.Migrations
 {
     [DbContext(typeof(DataContext))]
-    [Migration("20260601234043_AddCajaTables")]
-    partial class AddCajaTables
+    partial class DataContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -24,6 +21,93 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.ActivosEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id_activo");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("descripcion");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("int")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime?>("FechaActualizacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_actualizacion");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_creacion");
+
+                    b.Property<Guid?>("IdUsuario")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id_usuario");
+
+                    b.Property<decimal>("Monto")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("monto");
+
+                    b.Property<string>("Nombre")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("nombre");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("activos");
+                });
+
+            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.AuditoriaEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id_auditoria");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Accion")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("accion");
+
+                    b.Property<string>("Detalle")
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("detalle");
+
+                    b.Property<string>("Entidad")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("entidad");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha");
+
+                    b.Property<string>("IdEntidad")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("id_entidad");
+
+                    b.Property<Guid>("IdUsuario")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id_usuario");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("auditoria");
+                });
 
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Caja.CajaAperturaEntity", b =>
                 {
@@ -85,6 +169,7 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Concepto")
+                        .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("nvarchar(255)")
                         .HasColumnName("concepto");
@@ -101,9 +186,21 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("id_factura");
 
+                    b.Property<int?>("IdPago")
+                        .HasColumnType("int")
+                        .HasColumnName("id_pago");
+
+                    b.Property<int?>("IdRecibo")
+                        .HasColumnType("int")
+                        .HasColumnName("id_recibo");
+
                     b.Property<Guid>("IdUsuario")
                         .HasColumnType("uniqueidentifier")
                         .HasColumnName("id_usuario");
+
+                    b.Property<int?>("MetodoPago")
+                        .HasColumnType("int")
+                        .HasColumnName("metodo_pago");
 
                     b.Property<decimal>("Monto")
                         .HasColumnType("decimal(18,2)")
@@ -116,6 +213,60 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("caja_movimientos");
+                });
+
+            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Caja.ReciboEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id_recibo");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClienteNombre")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("cliente_nombre");
+
+                    b.Property<DateTime>("FechaEmision")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_emision");
+
+                    b.Property<Guid?>("IdCliente")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id_cliente");
+
+                    b.Property<int>("IdPago")
+                        .HasColumnType("int")
+                        .HasColumnName("id_pago");
+
+                    b.Property<Guid?>("IdUsuario")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id_usuario");
+
+                    b.Property<int?>("MetodoPago")
+                        .HasColumnType("int")
+                        .HasColumnName("metodo_pago");
+
+                    b.Property<decimal?>("MontoPagado")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("monto_pagado");
+
+                    b.Property<string>("NumeroFactura")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("numero_factura");
+
+                    b.Property<string>("NumeroRecibo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasColumnName("numero_recibo");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("recibos_caja");
                 });
 
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.CategoriaMateriaPrimaEntity", b =>
@@ -210,6 +361,99 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                     b.ToTable("clientes");
                 });
 
+            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Compras.DetalleCompraEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id_detalle");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Cantidad")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("cantidad");
+
+                    b.Property<int>("IdOrdenCompra")
+                        .HasColumnType("int")
+                        .HasColumnName("id_orden_compra");
+
+                    b.Property<int>("IdProducto")
+                        .HasColumnType("int")
+                        .HasColumnName("id_producto");
+
+                    b.Property<decimal>("PrecioUnitario")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("precio_unitario");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("subtotal");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("detalle_compra");
+                });
+
+            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Compras.OrdenCompraEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id_orden_compra");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Descuento")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("descuento");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("int")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime?>("FechaActualizacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_actualizacion");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_creacion");
+
+                    b.Property<DateTime>("FechaEmision")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_emision");
+
+                    b.Property<DateTime?>("FechaRecepcion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_recepcion");
+
+                    b.Property<Guid>("IdProveedor")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id_proveedor");
+
+                    b.Property<decimal>("Impuesto")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("impuesto");
+
+                    b.Property<string>("Observaciones")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("observaciones");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("subtotal");
+
+                    b.Property<decimal>("Total")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("total");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ordenes_compra");
+                });
+
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.EstadoEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -289,6 +533,10 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("cantidad");
 
+                    b.Property<bool?>("EsVentaPorPeso")
+                        .HasColumnType("bit")
+                        .HasColumnName("es_venta_por_peso");
+
                     b.Property<int?>("IdFactura")
                         .HasColumnType("int")
                         .HasColumnName("id_factura");
@@ -305,9 +553,17 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                         .HasColumnType("int")
                         .HasColumnName("id_unidad_medida");
 
+                    b.Property<decimal?>("PesoTotal")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("peso_total");
+
                     b.Property<decimal?>("Precio")
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("precio");
+
+                    b.Property<decimal?>("PrecioKilo")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("precio_kilo");
 
                     b.Property<decimal?>("Subtotal")
                         .HasColumnType("decimal(18,2)")
@@ -686,6 +942,94 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                     b.ToTable("movimientos_materia_prima");
                 });
 
+            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.PasivosEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id_pasivo");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("descripcion");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("int")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime?>("FechaActualizacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_actualizacion");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_creacion");
+
+                    b.Property<Guid?>("IdUsuario")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id_usuario");
+
+                    b.Property<decimal>("Monto")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("monto");
+
+                    b.Property<string>("Nombre")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("nombre");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("pasivos");
+                });
+
+            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.PatrimonioEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id_patrimonio");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)")
+                        .HasColumnName("descripcion");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("int")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime?>("FechaActualizacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_actualizacion");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("fecha_creacion");
+
+                    b.Property<Guid?>("IdUsuario")
+                        .HasColumnType("uniqueidentifier")
+                        .HasColumnName("id_usuario");
+
+                    b.Property<decimal>("Monto")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("monto");
+
+                    b.Property<string>("Nombre")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("nombre");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("patrimonio");
+                });
+
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Productos.CategoriasProductosEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -929,9 +1273,17 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("nombre");
 
+                    b.Property<decimal?>("PrecioPorKilo")
+                        .HasColumnType("decimal(18,2)")
+                        .HasColumnName("precio_por_kilo");
+
                     b.Property<decimal>("PrecioUnitario")
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("precio_unitario");
+
+                    b.Property<bool>("VentaPorPeso")
+                        .HasColumnType("bit")
+                        .HasColumnName("venta_por_peso");
 
                     b.HasKey("Id");
 
@@ -1053,6 +1405,10 @@ namespace DistribuidoraLaVilla.Infrastructure.Data.Migrations
                     b.Property<string>("Nombre")
                         .HasColumnType("nvarchar(max)")
                         .HasColumnName("nombre");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("int")
+                        .HasColumnName("tipo");
 
                     b.HasKey("Id");
 

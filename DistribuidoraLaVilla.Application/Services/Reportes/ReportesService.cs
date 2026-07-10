@@ -25,6 +25,8 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movProdRepo;
         private readonly IGenericRepository<LotesMateriaPrimaEntity, int> _loteMPRepo;
         private readonly IGenericRepository<PasivosEntity, int> _pasivosRepo;
+        private readonly IGenericRepository<ActivosEntity, int> _activosRepo;
+        private readonly IGenericRepository<PatrimonioEntity, int> _patrimonioRepo;
 
         public ReportesService(
             IGenericRepository<FacturaEntity, int> facturaRepo,
@@ -40,7 +42,9 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             IGenericRepository<MovimientosMateriaPrimaEntity, int> movMPRepo,
             IGenericRepository<MovimientosProductosEntity, int> movProdRepo,
             IGenericRepository<LotesMateriaPrimaEntity, int> loteMPRepo,
-            IGenericRepository<PasivosEntity, int> pasivosRepo)
+            IGenericRepository<PasivosEntity, int> pasivosRepo,
+            IGenericRepository<ActivosEntity, int> activosRepo,
+            IGenericRepository<PatrimonioEntity, int> patrimonioRepo)
         {
             _facturaRepo = facturaRepo;
             _detalleRepo = detalleRepo;
@@ -56,6 +60,8 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             _movProdRepo = movProdRepo;
             _loteMPRepo = loteMPRepo;
             _pasivosRepo = pasivosRepo;
+            _activosRepo = activosRepo;
+            _patrimonioRepo = patrimonioRepo;
         }
 
         // ──────────────────────────────────────────────
@@ -193,6 +199,77 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                     })
                 .ToListAsync();
 
+            // ── Alertas ──
+            var alertas = new List<string>();
+
+            var proximosVencerMP = await _loteMPRepo.GetQueryable()
+                .Where(l => l.Estado == 1 && l.FechaVencimiento <= today.AddDays(7) && l.CantidadDisponible > 0)
+                .CountAsync();
+
+            if (proximosVencerMP > 0)
+                alertas.Add($"{proximosVencerMP} lote(s) de materia prima próximos a vencer (7 días)");
+
+            var productosVencer = await _loteRepo.GetQueryable()
+                .Where(l => l.Estado == 1 && l.FechaVencimiento <= today.AddDays(30) && l.CantidadDisponible > 0)
+                .CountAsync();
+
+            if (productosVencer > 0)
+                alertas.Add($"{productosVencer} lote(s) de productos próximos a vencer (30 días)");
+
+            var cxcVencidasCount = await _cxcRepo.GetQueryable()
+                .Where(c => c.Estado == 1 && c.SaldoPendiente > 0
+                    && c.FechaVencimiento.HasValue && c.FechaVencimiento.Value.Date < today)
+                .CountAsync();
+
+            if (cxcVencidasCount > 0)
+                alertas.Add($"{cxcVencidasCount} cuenta(s) por cobrar vencidas");
+
+            var stockBajoCount = stockBajo.Count;
+            if (stockBajoCount > 0)
+                alertas.Add($"{stockBajoCount} producto(s) con stock bajo");
+
+            // ── Ventas Contado / Crédito (hoy) ──
+            var facturasHoy = await facturasQuery
+                .Where(f => f.Fecha.HasValue && f.Fecha.Value.Date == today)
+                .ToListAsync();
+
+            var ventasContado = new VentasPeriodoDTO
+            {
+                Total = facturasHoy.Where(f => f.TipoFactura == 1).Sum(f => f.Total ?? 0),
+                Count = facturasHoy.Count(f => f.TipoFactura == 1)
+            };
+
+            var ventasCredito = new VentasPeriodoDTO
+            {
+                Total = facturasHoy.Where(f => f.TipoFactura == 2).Sum(f => f.Total ?? 0),
+                Count = facturasHoy.Count(f => f.TipoFactura == 2)
+            };
+
+            // ── Stock Bajo por Categoría ──
+            var stockBajoProductIds = stockBajo.Select(s => s.IdProducto).ToList();
+            var productosConCategoria = await _productoRepo.GetQueryable()
+                .Where(p => stockBajoProductIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.IdCategoria })
+                .ToListAsync();
+
+            var categorias = await _categoriaRepo.GetQueryable()
+                .Select(c => new { c.Id, c.Nombre })
+                .ToListAsync();
+
+            var categoriaDict = categorias.ToDictionary(c => c.Id, c => c.Nombre ?? "Sin categoría");
+            var prodCategoriaDict = productosConCategoria.ToDictionary(p => p.Id, p => p.IdCategoria);
+
+            var stockBajoPorCategoria = stockBajo
+                .GroupBy(s => prodCategoriaDict.GetValueOrDefault(s.IdProducto, 0))
+                .Select(g => new StockBajoCategoriaDTO
+                {
+                    IdCategoria = g.Key,
+                    CategoriaNombre = categoriaDict.GetValueOrDefault(g.Key, "Sin categoría"),
+                    ProductosBajos = g.Count()
+                })
+                .OrderByDescending(s => s.ProductosBajos)
+                .ToList();
+
             return new DashboardDTO
             {
                 VentasHoy = ventasHoy,
@@ -202,7 +279,11 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 CxcPendiente = cxcPendiente,
                 CxcVencido = cxcVencido,
                 StockBajo = stockBajo,
-                UltimasFacturas = ultimasFacturas
+                UltimasFacturas = ultimasFacturas,
+                Alertas = alertas,
+                VentasContado = ventasContado,
+                VentasCredito = ventasCredito,
+                StockBajoPorCategoria = stockBajoPorCategoria
             };
         }
 
@@ -263,10 +344,38 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             var cuentasPorCobrarTotal = cxcItems.Sum(c => c.SaldoPendiente);
             var inventarioProductosTotal = productosTerminados.Sum(p => p.ValorTotal);
             var inventarioMateriaPrimaTotal = materiaPrima.Sum(m => m.ValorTotal);
+
+            var activosItems = await _activosRepo.GetQueryable()
+                .Where(a => a.Estado == 1)
+                .Select(a => new BalanceActivoItemDTO
+                {
+                    IdActivo = a.Id,
+                    Nombre = a.Nombre ?? string.Empty,
+                    Descripcion = a.Descripcion,
+                    Monto = a.Monto
+                })
+                .ToListAsync();
+
+            var activosDirectoTotal = activosItems.Sum(a => a.Monto);
+
             var pasivosTotal = await _pasivosRepo.GetQueryable()
                 .Where(p => p.Estado == 1)
                 .SumAsync(p => p.Monto);
-            var activosTotal = cuentasPorCobrarTotal + inventarioProductosTotal + inventarioMateriaPrimaTotal;
+
+            var patrimoniosItems = await _patrimonioRepo.GetQueryable()
+                .Where(p => p.Estado == 1)
+                .Select(p => new BalancePatrimonioItemDTO
+                {
+                    IdPatrimonio = p.Id,
+                    Nombre = p.Nombre ?? string.Empty,
+                    Descripcion = p.Descripcion,
+                    Monto = p.Monto
+                })
+                .ToListAsync();
+
+            var patrimonioDirectoTotal = patrimoniosItems.Sum(p => p.Monto);
+
+            var activosTotal = cuentasPorCobrarTotal + inventarioProductosTotal + inventarioMateriaPrimaTotal + activosDirectoTotal;
 
             return new BalanceMinimoReporteDTO
             {
@@ -276,11 +385,15 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 InventarioMateriaPrimaTotal = inventarioMateriaPrimaTotal,
                 ActivosTotal = activosTotal,
                 PasivosTotal = pasivosTotal,
-                PatrimonioTotal = activosTotal - pasivosTotal,
+                PatrimonioTotal = patrimonioDirectoTotal,
+                ActivosNota = "Los activos incluyen cuentas por cobrar, inventario de productos, materia prima y registros de la tabla activos.",
                 PasivosNota = "Los pasivos se calculan desde la tabla pasivos con registros activos.",
+                PatrimonioNota = "El patrimonio se calcula desde la tabla patrimonio con registros activos.",
                 CuentasPorCobrar = cxcItems,
                 ProductosTerminados = productosTerminados,
-                MateriaPrima = materiaPrima
+                MateriaPrima = materiaPrima,
+                Activos = activosItems,
+                Patrimonios = patrimoniosItems
             };
         }
 

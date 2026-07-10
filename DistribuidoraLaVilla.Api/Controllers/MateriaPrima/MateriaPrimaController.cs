@@ -31,26 +31,53 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("ObtenerMateriaPrimaPorId/{idMateriaPrima}")]
         public async Task<IActionResult> ObtenerMateriaPrimaPorId(int idMateriaPrima)
         {
-            var result = await _materiaPrimaService.ObtnerMateriPrimaPorId(idMateriaPrima);
-            return Ok(result);
+            try
+            {
+                var result = await _materiaPrimaService.ObtnerMateriPrimaPorId(idMateriaPrima);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("no existe", StringComparison.OrdinalIgnoreCase) || ex.Message.Contains("no se encontro", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { mensaje = ex.Message });
+                throw;
+            }
         }
 
         [HttpPut]
         [Route("ActualizarEstadoMateriaPrima")]
         public async Task<IActionResult> ActualizarEstadoMateriaPrima([FromBody] MateriaPrimaActualizarEstadoDTO materiaPrimaActualizarEstadoDTO)
         {
-            await _materiaPrimaService.ActualizarEstadoMateriaPrima(materiaPrimaActualizarEstadoDTO, GetUserId());
-            return Ok();
+            try
+            {
+                await _materiaPrimaService.ActualizarEstadoMateriaPrima(materiaPrimaActualizarEstadoDTO, GetUserId());
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("no existe", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { mensaje = ex.Message });
+                throw;
+            }
         }
 
         [HttpPut]
         [Route("ActualizarMateriaPrima/{idMateriaPrima}")]
         public async Task<IActionResult> ActualizarMateriaPrima(int idMateriaPrima, [FromBody] MateriaPrimaDTO materiaPrimaDTO)
         {
-            await _materiaPrimaService.ActualizarMateriaPrima(idMateriaPrima, materiaPrimaDTO, GetUserId());
-            return Ok();
+            try
+            {
+                await _materiaPrimaService.ActualizarMateriaPrima(idMateriaPrima, materiaPrimaDTO, GetUserId());
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("no existe", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { mensaje = ex.Message });
+                throw;
+            }
         }      
-
+        
         [HttpGet]
         [Route("ObtenerMateriasPrimasDisponibles")]
         public async Task<IActionResult> ObtenerMateriasPrimasDisponibles()
@@ -63,10 +90,19 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("EliminarMateriaPrima/{idMateriaPrima}")]
         public async Task<IActionResult> EliminarMateriaPrima(int idMateriaPrima)
         {
-            await _materiaPrimaService.EliminarMateriaPrimaAsync(idMateriaPrima, GetUserId());
-            return Ok();
+            try
+            {
+                await _materiaPrimaService.EliminarMateriaPrimaAsync(idMateriaPrima, GetUserId());
+                return Ok(new { mensaje = "Materia prima eliminada correctamente" });
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("no existe", StringComparison.OrdinalIgnoreCase))
+                    return NotFound(new { mensaje = ex.Message });
+                throw;
+            }
         }
-
+        
         private Guid GetUserId()
         {
             var nameIdentifier = User.FindFirstValue(ClaimTypes.NameIdentifier);

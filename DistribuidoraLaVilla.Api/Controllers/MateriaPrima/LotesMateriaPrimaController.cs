@@ -55,16 +55,30 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
         [Route("ObtenerLoteMateriaPrimaPorId/{id}")]
         public async Task<IActionResult> ObtenerLoteMateriaPrimaPorId(int id)
         {
-            var lote = await _lotesMateriaPrimaService.ObtenerLoteMateriaPrimaPorIdAsync(id);
-            return Ok(lote);
+            try
+            {
+                var lote = await _lotesMateriaPrimaService.ObtenerLoteMateriaPrimaPorIdAsync(id);
+                return Ok(lote);
+            }
+            catch (Exception ex) when (ex.Message.Contains("no existe"))
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
         }
 
         [HttpPut]
         [Route("ActualizarEstadoLoteMateriaPrima")]
         public async Task<IActionResult> ActualizarEstadoLoteMateriaPrima([FromBody] ActualizarEstadoTipoIntDTO actualizarEstadoDTO)
         {
-            await _lotesMateriaPrimaService.ActualizarEstadoLoteMateriaPrima(actualizarEstadoDTO);
-            return Ok();
+            try
+            {
+                await _lotesMateriaPrimaService.ActualizarEstadoLoteMateriaPrima(actualizarEstadoDTO);
+                return Ok();
+            }
+            catch (Exception ex) when (ex.Message.Contains("no existe"))
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
         }
 
         [HttpPut]
@@ -114,9 +128,9 @@ namespace DistribuidoraLaVilla.Api.Controllers.MateriaPrima
                 await _lotesMateriaPrimaService.EliminarLoteMateriaPrimaAsync(idLote, userId);
                 return Ok(new { mensaje = "Lote dado de baja correctamente" });
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex.Message.Contains("no existe"))
             {
-                return BadRequest(new { mensaje = ex.Message });
+                return NotFound(new { mensaje = ex.Message });
             }
         }
     }
