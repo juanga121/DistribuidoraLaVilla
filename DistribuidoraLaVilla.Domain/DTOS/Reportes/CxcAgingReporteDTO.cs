@@ -9,6 +9,7 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Reportes
     public class CxcBucketDTO
     {
         public string Key { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
         public int Count { get; set; }
         public decimal Total { get; set; }
         public List<CxcItemDTO> Items { get; set; } = new();

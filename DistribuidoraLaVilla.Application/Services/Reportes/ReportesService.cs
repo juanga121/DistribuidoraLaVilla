@@ -404,8 +404,11 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
         public async Task<VentasReporteDTO> GetVentasAsync(DateTime desde, DateTime hasta,
             Guid? idCliente, int? idProducto)
         {
+            var desdeDate = desde.Date;
+            var hastaDate = hasta.Date.AddDays(1).AddTicks(-1);
+
             var facturasQuery = _facturaRepo.GetQueryable()
-                .Where(f => f.Estado == 1 && f.Fecha.HasValue && f.Fecha.Value.Date >= desde.Date && f.Fecha.Value.Date <= hasta.Date);
+                .Where(f => f.Estado == 1 && f.Fecha.HasValue && f.Fecha.Value >= desdeDate && f.Fecha.Value <= hastaDate);
 
             // Optional: filter by client
             if (idCliente.HasValue)
@@ -425,26 +428,27 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             }
 
             var clientesQuery = _clienteRepo.GetQueryable();
-            var tiposQuery = _tipoFacturaRepo.GetQueryable();
+            var tiposDict = await _tipoFacturaRepo.GetQueryable()
+                .ToDictionaryAsync(t => t.Id, t => t.Nombre);
 
-            var resultado = await facturasQuery
+            var rawResult = await facturasQuery
                 .Join(clientesQuery,
                     f => f.IdCliente,
                     c => (Guid?)c.IdCliente,
                     (f, c) => new { f, ClienteNombre = c.Nombre ?? string.Empty })
-                .Join(tiposQuery,
-                    x => x.f.TipoFactura,
-                    t => (int?)t.Id,
-                    (x, t) => new VentaItemDTO
-                    {
-                        IdFactura = x.f.Id,
-                        Fecha = x.f.Fecha ?? DateTime.MinValue,
-                        Cliente = x.ClienteNombre,
-                        Total = x.f.Total ?? 0,
-                        Tipo = t.Nombre ?? string.Empty
-                    })
-                .OrderByDescending(v => v.Fecha)
+                .OrderByDescending(x => x.f.Fecha)
                 .ToListAsync();
+
+            var resultado = rawResult.Select(x => new VentaItemDTO
+            {
+                IdFactura = x.f.Id,
+                Fecha = x.f.Fecha ?? DateTime.MinValue,
+                Cliente = x.ClienteNombre,
+                Total = x.f.Total ?? 0,
+                Tipo = x.f.TipoFactura.HasValue && tiposDict.ContainsKey(x.f.TipoFactura.Value)
+                    ? tiposDict[x.f.TipoFactura.Value] ?? "Desconocido"
+                    : "Desconocido"
+            }).ToList();
 
             return new VentasReporteDTO
             {
@@ -490,10 +494,10 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             // Group into buckets in memory (days past due needs C# computation)
             var buckets = new List<CxcBucketDTO>
             {
-                new CxcBucketDTO { Key = "corriente" },
-                new CxcBucketDTO { Key = "30_60" },
-                new CxcBucketDTO { Key = "60_90" },
-                new CxcBucketDTO { Key = "90_mas" }
+                new CxcBucketDTO { Key = "corriente", Nombre = "Corriente (≤30 días)" },
+                new CxcBucketDTO { Key = "30_60", Nombre = "30-60 días" },
+                new CxcBucketDTO { Key = "60_90", Nombre = "60-90 días" },
+                new CxcBucketDTO { Key = "90_mas", Nombre = "Más de 90 días" }
             };
 
             foreach (var item in items)
@@ -621,20 +625,23 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             if (cliente == null)
                 return null;
 
-            var facturas = await _facturaRepo.GetQueryable()
+            var tiposDict = await _tipoFacturaRepo.GetQueryable()
+                .ToDictionaryAsync(t => t.Id, t => t.Nombre);
+
+            var rawFacturas = await _facturaRepo.GetQueryable()
                 .Where(f => f.IdCliente == idCliente && f.Estado == 1)
-                .Join(_tipoFacturaRepo.GetQueryable(),
-                    f => f.TipoFactura,
-                    t => (int?)t.Id,
-                    (f, t) => new FacturaClienteDTO
-                    {
-                        IdFactura = f.Id,
-                        Fecha = f.Fecha ?? DateTime.MinValue,
-                        Tipo = t.Nombre ?? string.Empty,
-                        Total = f.Total ?? 0
-                    })
                 .OrderByDescending(f => f.Fecha)
                 .ToListAsync();
+
+            var facturas = rawFacturas.Select(f => new FacturaClienteDTO
+            {
+                IdFactura = f.Id,
+                Fecha = f.Fecha ?? DateTime.MinValue,
+                Tipo = f.TipoFactura.HasValue && tiposDict.ContainsKey(f.TipoFactura.Value)
+                    ? tiposDict[f.TipoFactura.Value] ?? "Desconocido"
+                    : "Desconocido",
+                Total = f.Total ?? 0
+            }).ToList();
 
             var cxcSaldo = await _cxcRepo.GetQueryable()
                 .Where(c => c.IdCliente == idCliente && c.SaldoPendiente > 0 && c.Estado == 1)
@@ -660,8 +667,11 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
         public async Task<MovimientosReporteDTO> GetMovimientosAsync(DateTime desde, DateTime hasta,
             int? idProducto, int? tipoMovimiento)
         {
+            var desdeDate = desde.Date;
+            var hastaDate = hasta.Date.AddDays(1).AddTicks(-1);
+
             var movimientosQuery = _movimientoRepo.GetQueryable()
-                .Where(m => m.FechaMovimiento.Date >= desde.Date && m.FechaMovimiento.Date <= hasta.Date);
+                .Where(m => m.FechaMovimiento >= desdeDate && m.FechaMovimiento <= hastaDate);
 
             if (tipoMovimiento.HasValue)
             {
@@ -756,11 +766,12 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
 
         public async Task<MovimientosDiariosDTO> GetMovimientosDiariosAsync()
         {
-            var today = DateTime.Now.Date;
+            var todayStart = DateTime.Now.Date;
+            var todayEnd = todayStart.AddDays(1);
 
             // ── Facturación del día ──
             var facturasHoy = await _facturaRepo.GetQueryable()
-                .Where(f => f.Fecha.HasValue && f.Fecha.Value.Date == today && f.Estado == 1)
+                .Where(f => f.Fecha.HasValue && f.Fecha.Value >= todayStart && f.Fecha.Value < todayEnd && f.Estado == 1)
                 .ToListAsync();
 
             var contado = facturasHoy.Count(f => f.TipoFactura == 1);
@@ -768,14 +779,14 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
 
             // ── Movimientos MP del día ──
             var movMP = await _movMPRepo.GetQueryable()
-                .Where(m => m.Fecha.Date == today)
+                .Where(m => m.Fecha >= todayStart && m.Fecha < todayEnd)
                 .GroupBy(m => m.IdTipoMovimiento)
                 .Select(g => new { Tipo = g.Key, Count = g.Count() })
                 .ToListAsync();
 
             // ── Movimientos Productos del día ──
             var movProd = await _movProdRepo.GetQueryable()
-                .Where(m => m.FechaMovimiento.Date == today)
+                .Where(m => m.FechaMovimiento >= todayStart && m.FechaMovimiento < todayEnd)
                 .GroupBy(m => m.TipoMovimiento)
                 .Select(g => new { Tipo = g.Key, Count = g.Count() })
                 .ToListAsync();
@@ -786,21 +797,21 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 .ToListAsync();
 
             var cxcVencidas = cxcPendientes
-                .Where(c => c.FechaVencimiento.HasValue && c.FechaVencimiento.Value.Date < today)
+                .Where(c => c.FechaVencimiento.HasValue && c.FechaVencimiento.Value < todayStart)
                 .ToList();
 
             // ── Alertas ──
             var alertas = new List<string>();
 
             var proximosVencer = await _loteMPRepo.GetQueryable()
-                .Where(l => l.Estado == 1 && l.FechaVencimiento <= today.AddDays(7) && l.CantidadDisponible > 0)
+                .Where(l => l.Estado == 1 && l.FechaVencimiento <= todayStart.AddDays(7) && l.CantidadDisponible > 0)
                 .CountAsync();
 
             if (proximosVencer > 0)
                 alertas.Add($"{proximosVencer} lote(s) de materia prima próximos a vencer (7 días)");
 
             var productosVencer = await _loteRepo.GetQueryable()
-                .Where(l => l.Estado == 1 && l.FechaVencimiento <= today.AddDays(30) && l.CantidadDisponible > 0)
+                .Where(l => l.Estado == 1 && l.FechaVencimiento <= todayStart.AddDays(30) && l.CantidadDisponible > 0)
                 .CountAsync();
 
             if (productosVencer > 0)
@@ -818,7 +829,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
 
             return new MovimientosDiariosDTO
             {
-                Fecha = today.ToString("dd/MM/yyyy"),
+                Fecha = todayStart.ToString("dd/MM/yyyy"),
                 Facturas = new ResumenFacturasDTO
                 {
                     Cantidad = facturasHoy.Count,
