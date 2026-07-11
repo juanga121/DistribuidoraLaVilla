@@ -203,8 +203,9 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         /// </summary>
         public List<MovimientosProductosEntity> ObtenerMovimientosPorFechas(DateTime fechaInicio, DateTime fechaFin)
         {
+            var finDelDia = fechaFin.Date.AddDays(1).AddTicks(-1);
             return _movimientosRepository.GetByFilter(m =>
-                m.FechaMovimiento >= fechaInicio && m.FechaMovimiento <= fechaFin);
+                m.FechaMovimiento >= fechaInicio && m.FechaMovimiento <= finDelDia);
         }
 
         /// <summary>
