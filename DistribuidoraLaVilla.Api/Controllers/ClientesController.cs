@@ -15,60 +15,109 @@ namespace DistribuidoraLaVilla.Api.Controllers
         [Route("CrearCliente")]
         public async Task<IActionResult> CrearCliente([FromBody] ClientesDTO clientesDTO)
         {
-            var idUsuario = GetUserId();
-            await _clientesService.CrearClienteAsync(clientesDTO, idUsuario);
-            return Ok();
+            try
+            {
+                var idUsuario = GetUserId();
+                await _clientesService.CrearClienteAsync(clientesDTO, idUsuario);
+                return Ok(new { success = true, message = "Cliente creado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpGet]
         [Route("ObtenerClientes")]
         public async Task<IActionResult> ObtenerClientes()
         {
-            var clientes = await _clientesService.ObtenerClientesAsync();
-            return Ok(clientes);
+            try
+            {
+                var clientes = await _clientesService.ObtenerClientesAsync();
+                return Ok(new { success = true, message = "Clientes obtenidos correctamente", data = clientes });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
 
         [HttpGet]
         [Route("ObtenerClientePorId/{id:guid}")]
         public async Task<IActionResult> ObtenerClientePorId(Guid id)
         {
-            var cliente = await _clientesService.ObtenerClientePorIdAsync(id);
-            return Ok(cliente);
+            try
+            {
+                var cliente = await _clientesService.ObtenerClientePorIdAsync(id);
+                return Ok(new { success = true, message = "Cliente obtenido correctamente", data = cliente });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpPut]
         [Route("ActualizarEstadoCliente")]
         public async Task<IActionResult> ActualizarEstadoCliente([FromBody] ActualizarEstadoTipoGuidDTO actualizarEstadoDTO)
         {
-            var idUsuario = GetUserId();
-            await _clientesService.ActualizarEstadoCliente(actualizarEstadoDTO, idUsuario);
-            return Ok();
+            try
+            {
+                var idUsuario = GetUserId();
+                await _clientesService.ActualizarEstadoCliente(actualizarEstadoDTO, idUsuario);
+                return Ok(new { success = true, message = "Estado del cliente actualizado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpPut]
         [Route("ActualizarCliente/{idCliente:guid}")]
         public async Task<IActionResult> ActualizarCliente(Guid idCliente, [FromBody] ClientesDTO clientesDTO)
         {
-            var idUsuario = GetUserId();
-            await _clientesService.ActualizarCliente(idCliente, clientesDTO, idUsuario);
-            return Ok();
+            try
+            {
+                var idUsuario = GetUserId();
+                await _clientesService.ActualizarCliente(idCliente, clientesDTO, idUsuario);
+                return Ok(new { success = true, message = "Cliente actualizado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpGet]
         [Route("ObtenerClientesDisponibles")]
         public async Task<IActionResult> ObtenerClientesDisponibles()
         {
-            var clientes = await _clientesService.ObtenerClientesDisponibles();
-            return Ok(clientes);
+            try
+            {
+                var clientes = await _clientesService.ObtenerClientesDisponibles();
+                return Ok(new { success = true, message = "Clientes disponibles obtenidos correctamente", data = clientes });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
 
         [HttpDelete]
         [Route("EliminarCliente/{idCliente}")]
         public async Task<IActionResult> EliminarCliente(Guid idCliente)
         {
-            var idUsuario = GetUserId();
-            await _clientesService.EliminarClienteAsync(idCliente, idUsuario);
-            return Ok();
+            try
+            {
+                var idUsuario = GetUserId();
+                await _clientesService.EliminarClienteAsync(idCliente, idUsuario);
+                return Ok(new { success = true, message = "Cliente eliminado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
         }
 
         /// <summary>

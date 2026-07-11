@@ -144,11 +144,13 @@ namespace DistribuidoraLaVilla.Application.Services
             if (usuario is null)
                 throw new Exception("El usuario no existe");
 
-            await _repository.DeleteAsync(id);
+            usuario.Estado = 2;
+            await _repository.UpdateAsync(usuario);
             await RegistrarAuditoriaAsync("Usuario", usuario.Id.ToString(), "Eliminar", new
             {
                 nombre = usuario.Nombre,
-                email = usuario.Email
+                email = usuario.Email,
+                estadoNuevo = 2
             }, idUsuario);
         }
 

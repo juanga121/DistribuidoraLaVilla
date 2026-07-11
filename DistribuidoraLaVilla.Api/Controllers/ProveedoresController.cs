@@ -15,56 +15,105 @@ namespace DistribuidoraLaVilla.Api.Controllers
         [Route("CrearProveedor")]
         public async Task<IActionResult> CrearProveedor([FromBody] ProveedoresDTO proveedoresDTO)
         {
-            await _proveedoresService.CrearProveedorAsync(proveedoresDTO, GetUserId());
-            return Ok();
+            try
+            {
+                await _proveedoresService.CrearProveedorAsync(proveedoresDTO, GetUserId());
+                return Ok(new { success = true, message = "Proveedor creado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpGet]
         [Route("ObtenerProveedores")]
         public async Task<IActionResult> ObtenerProveedores()
         {
-            var proveedores = await _proveedoresService.ObtenerProveedoresAsync();
-            return Ok(proveedores);
+            try
+            {
+                var proveedores = await _proveedoresService.ObtenerProveedoresAsync();
+                return Ok(new { success = true, message = "Proveedores obtenidos correctamente", data = proveedores });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
 
         [HttpGet]
         [Route("ObtenerProveedorPorId/{id:guid}")]
         public async Task<IActionResult> ObtenerProveedorPorId(Guid id)
         {
-            var proveedor = await _proveedoresService.ObtenerProveedorPorIdAsync(id);
-            return Ok(proveedor);
+            try
+            {
+                var proveedor = await _proveedoresService.ObtenerProveedorPorIdAsync(id);
+                return Ok(new { success = true, message = "Proveedor obtenido correctamente", data = proveedor });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpPut]
         [Route("ActualizarEstadoProveedor")]
         public async Task<IActionResult> ActualizarEstadoProveedor([FromBody] ActualizarEstadoTipoGuidDTO actualizarEstadoDTO)
         {
-            await _proveedoresService.ActualizarEstadoProveedor(actualizarEstadoDTO, GetUserId());
-            return Ok();
+            try
+            {
+                await _proveedoresService.ActualizarEstadoProveedor(actualizarEstadoDTO, GetUserId());
+                return Ok(new { success = true, message = "Estado del proveedor actualizado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpPut]
         [Route("ActualizarProveedor/{idProveedor:guid}")]
         public async Task<IActionResult> ActualizarProveedor(Guid idProveedor, [FromBody] ProveedoresDTO proveedoresDTO)
         {
-            await _proveedoresService.ActualizarProveedor(idProveedor, proveedoresDTO, GetUserId());
-            return Ok();
+            try
+            {
+                await _proveedoresService.ActualizarProveedor(idProveedor, proveedoresDTO, GetUserId());
+                return Ok(new { success = true, message = "Proveedor actualizado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
         }
 
         [HttpGet]
         [Route("ObtenerProveedoresDisponibles")]
         public async Task<IActionResult> ObtenerProveedoresDisponibles()
         {
-            var proveedores = await _proveedoresService.ObtnenerProveedoresDisponibles();
-            return Ok(proveedores);
+            try
+            {
+                var proveedores = await _proveedoresService.ObtnenerProveedoresDisponibles();
+                return Ok(new { success = true, message = "Proveedores disponibles obtenidos correctamente", data = proveedores });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
 
         [HttpDelete]
         [Route("EliminarProveedor/{idProveedor}")]
         public async Task<IActionResult> EliminarProveedor(Guid idProveedor)
         {
-            await _proveedoresService.EliminarProveedorAsync(idProveedor, GetUserId());
-            return Ok();
+            try
+            {
+                await _proveedoresService.EliminarProveedorAsync(idProveedor, GetUserId());
+                return Ok(new { success = true, message = "Proveedor eliminado exitosamente" });
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
         }
 
         private Guid GetUserId()

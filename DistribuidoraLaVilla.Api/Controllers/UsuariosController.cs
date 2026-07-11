@@ -22,6 +22,9 @@ namespace DistribuidoraLaVilla.Api.Controllers
         {
             try
             {
+                if (string.IsNullOrWhiteSpace(dto.Email) || string.IsNullOrWhiteSpace(dto.Password))
+                    return BadRequest(new { success = false, message = "El email y la contraseña son requeridos" });
+
                 var resultado = await _usuariosService.LoginAsync(dto);
                 return Ok(new { success = true, message = "Inicio de sesión exitoso", data = resultado });
             }
@@ -87,6 +90,8 @@ namespace DistribuidoraLaVilla.Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex.Message.Contains("no existe"))
+                    return NotFound(new { success = false, message = ex.Message });
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
@@ -102,6 +107,8 @@ namespace DistribuidoraLaVilla.Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex.Message.Contains("no existe"))
+                    return NotFound(new { success = false, message = ex.Message });
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
@@ -117,6 +124,8 @@ namespace DistribuidoraLaVilla.Api.Controllers
             }
             catch (Exception ex)
             {
+                if (ex.Message.Contains("no existe"))
+                    return NotFound(new { success = false, message = ex.Message });
                 return BadRequest(new { success = false, message = ex.Message });
             }
         }
