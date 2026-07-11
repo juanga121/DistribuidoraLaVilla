@@ -1,5 +1,6 @@
 using DistribuidoraLaVilla.Application.Services.Compras;
 using DistribuidoraLaVilla.Domain.DTOS.Compras;
+using FluentValidation;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -29,6 +30,10 @@ namespace DistribuidoraLaVilla.Api.Controllers
                 var userId = GetUserId();
                 var resultado = await _service.CrearOrdenCompraAsync(dto, userId);
                 return Ok(resultado);
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
             }
             catch (KeyNotFoundException ex)
             {

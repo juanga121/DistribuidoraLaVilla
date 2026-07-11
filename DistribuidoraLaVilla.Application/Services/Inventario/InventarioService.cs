@@ -152,7 +152,8 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             int idUnidadMedida,
             Guid idUsuario,
             string observacion,
-            bool esVentaPorPeso)
+            bool esVentaPorPeso,
+            decimal? pesoPorUnidad = null)
         {
             // 1. Verificar que el producto exista
             var producto = await _productosRepository.FindByIdAsync(idProducto)
@@ -168,14 +169,39 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                 l.CantidadDisponible > 0
             ).OrderBy(l => l.FechaVencimiento).ToList();
 
-            // 3. Validar stock suficiente
-            var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
-
-            if (stockTotal < cantidadRequerida)
+            // 3. Validar stock suficiente según modo y si existe conversión de peso
+            if (pesoPorUnidad.HasValue)
             {
-                throw new InvalidOperationException(
-                    $"Stock insuficiente de '{producto.Nombre}'. " +
-                    $"Requerido: {cantidadRequerida}, Disponible: {stockTotal}");
+                if (esVentaPorPeso)
+                {
+                    var pesoTotal = lotesDisponibles.Sum(l => l.PesoDisponible);
+                    if (pesoTotal < cantidadRequerida)
+                    {
+                        throw new InvalidOperationException(
+                            $"Stock insuficiente de '{producto.Nombre}'. " +
+                            $"Requerido: {cantidadRequerida} kg, Disponible: {pesoTotal} kg");
+                    }
+                }
+                else
+                {
+                    var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
+                    if (stockTotal < cantidadRequerida)
+                    {
+                        throw new InvalidOperationException(
+                            $"Stock insuficiente de '{producto.Nombre}'. " +
+                            $"Requerido: {cantidadRequerida} unidades, Disponible: {stockTotal} unidades");
+                    }
+                }
+            }
+            else
+            {
+                var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
+                if (stockTotal < cantidadRequerida)
+                {
+                    throw new InvalidOperationException(
+                        $"Stock insuficiente de '{producto.Nombre}'. " +
+                        $"Requerido: {cantidadRequerida}, Disponible: {stockTotal}");
+                }
             }
 
             var consumos = new List<ConsumoProductoDTO>();
@@ -186,10 +212,37 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             {
                 if (cantidadPendiente <= 0) break;
 
-                decimal cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
+                decimal cantidadAConsumir;
+                decimal unidadesAConsumir = 0;
+                decimal pesoAConsumir = 0;
 
-                // 4. Descontar CantidadDisponible del lote
-                lote.CantidadDisponible -= cantidadAConsumir;
+                if (pesoPorUnidad.HasValue && esVentaPorPeso)
+                {
+                    // Venta por peso: cantidadRequerida es kg
+                    cantidadAConsumir = Math.Min(lote.PesoDisponible, cantidadPendiente);
+                    unidadesAConsumir = cantidadAConsumir / pesoPorUnidad.Value;
+                    pesoAConsumir = cantidadAConsumir;
+
+                    lote.PesoDisponible -= pesoAConsumir;
+                    lote.CantidadDisponible -= unidadesAConsumir;
+                }
+                else if (pesoPorUnidad.HasValue && !esVentaPorPeso)
+                {
+                    // Venta por unidad: cantidadRequerida es unidades
+                    cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
+                    unidadesAConsumir = cantidadAConsumir;
+                    pesoAConsumir = cantidadAConsumir * pesoPorUnidad.Value;
+
+                    lote.CantidadDisponible -= unidadesAConsumir;
+                    lote.PesoDisponible -= pesoAConsumir;
+                }
+                else
+                {
+                    // Sin pesoPorUnidad: comportamiento anterior
+                    cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
+                    lote.CantidadDisponible -= cantidadAConsumir;
+                }
+
                 await _lotesProductosRepository.UpdateAsync(lote);
 
                 // 5. Crear registro en movimientos (tipo_movimiento = 2 Venta)

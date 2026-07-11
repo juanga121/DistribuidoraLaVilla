@@ -36,6 +36,9 @@ namespace DistribuidoraLaVilla.Domain.Entities.Productos
         [Column("precio_por_kilo", TypeName = "decimal(18,2)")]
         public decimal? PrecioPorKilo { get; set; }
 
+        [Column("peso_por_unidad", TypeName = "decimal(18,4)")]
+        public decimal? PesoPorUnidad { get; set; }
+
         [Column("estado")]
         public int Estado { get; set; }
     }

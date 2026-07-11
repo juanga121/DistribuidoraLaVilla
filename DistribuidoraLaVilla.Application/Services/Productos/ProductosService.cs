@@ -32,6 +32,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 PrecioUnitario = productoDTO.PrecioUnitario,
                 VentaPorPeso = productoDTO.VentaPorPeso,
                 PrecioPorKilo = productoDTO.PrecioPorKilo,
+                PesoPorUnidad = productoDTO.PesoPorUnidad,
                 Estado = 1
             };
             await _productos.CreateAsync(productoEntity);
@@ -104,6 +105,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 producto.PrecioUnitario = productoDTO.PrecioUnitario;
                 producto.VentaPorPeso = productoDTO.VentaPorPeso;
                 producto.PrecioPorKilo = productoDTO.PrecioPorKilo;
+                producto.PesoPorUnidad = productoDTO.PesoPorUnidad;
                 await _productos.UpdateAsync(producto);
 
                 try

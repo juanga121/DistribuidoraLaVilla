@@ -14,5 +14,6 @@ namespace DistribuidoraLaVilla.Domain.DTOS
         public decimal PrecioUnitario { get; set; }
         public bool VentaPorPeso { get; set; }
         public decimal? PrecioPorKilo { get; set; }
+        public decimal? PesoPorUnidad { get; set; }
     }
 }

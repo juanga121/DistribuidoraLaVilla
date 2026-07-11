@@ -58,6 +58,23 @@ namespace DistribuidoraLaVilla.Api.Controllers
         }
 
         /// <summary>
+        /// Retorna todas las cuentas por cobrar pagadas (Estado = 2 o SaldoPendiente = 0).
+        /// </summary>
+        [HttpGet("Pagadas")]
+        public async Task<ActionResult<List<CuentaCobrarDTO>>> ObtenerPagadas()
+        {
+            try
+            {
+                var resultado = await _cxcService.ObtenerPagadasAsync();
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = $"Error al obtener cuentas pagadas: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
         /// Retorna el estado de cuenta detallado de un cliente.
         /// </summary>
         [HttpGet("EstadoCuenta/{idCliente}")]

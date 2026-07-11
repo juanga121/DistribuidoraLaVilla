@@ -26,6 +26,7 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Productos
         public string? NombreMarca { get; set; }
         public decimal CantidadInicial { get; set; }
         public decimal CantidadDisponible { get; set; }
+        public decimal PesoDisponible { get; set; }
         public int Estado { get; set; }
     }
 }

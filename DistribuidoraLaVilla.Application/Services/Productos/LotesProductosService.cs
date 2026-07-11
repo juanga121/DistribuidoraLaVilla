@@ -45,6 +45,23 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
             var precioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
 
+            var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto);
+            var pesoPorUnidad = producto?.PesoPorUnidad;
+
+            // Calcular CantidadDisponible y PesoDisponible según si el producto tiene peso por unidad
+            decimal cantidadDisponible;
+            decimal pesoDisponible;
+            if (pesoPorUnidad.HasValue)
+            {
+                cantidadDisponible = lotesProductosDTO.CantidadUnidades;
+                pesoDisponible = lotesProductosDTO.CantidadUnidades * pesoPorUnidad.Value;
+            }
+            else
+            {
+                cantidadDisponible = lotesProductosDTO.PesoTotal;
+                pesoDisponible = lotesProductosDTO.PesoTotal;
+            }
+
             LotesProductosEntity entity = new()
             {
                 IdProducto = lotesProductosDTO.IdProducto,
@@ -59,7 +76,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 PrecioTotal = precioTotal,
                 IdMarca = lotesProductosDTO.IdMarca,
                 CantidadInicial = lotesProductosDTO.PesoTotal,
-                CantidadDisponible = lotesProductosDTO.PesoTotal,
+                CantidadDisponible = cantidadDisponible,
+                PesoDisponible = pesoDisponible,
                 Estado = 1
             };
             await _lotesProductosRepository.CreateAsync(entity);
@@ -167,8 +185,11 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             var lote = await _lotesProductosRepository.FindByIdAsync(id);
             if (lote != null)
             {
-                // Calculamos la diferencia para ajustar CantidadDisponible
+                // Calculamos la diferencia para ajustar CantidadDisponible y PesoDisponible
                 var diferenciaPeso = lotesProductosDTO.PesoTotal - lote.PesoTotal;
+
+                var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto);
+                var pesoPorUnidad = producto?.PesoPorUnidad;
 
                 lote.IdProducto = lotesProductosDTO.IdProducto;
                 lote.IdProveedor = lotesProductosDTO.IdProveedor;
@@ -182,7 +203,20 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 lote.PrecioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
                 lote.IdMarca = lotesProductosDTO.IdMarca;
                 lote.CantidadInicial = lotesProductosDTO.PesoTotal;
-                lote.CantidadDisponible += diferenciaPeso;
+
+                if (pesoPorUnidad.HasValue)
+                {
+                    // Para productos con peso por unidad, CantidadDisponible es unidades y PesoDisponible es kg
+                    lote.CantidadDisponible += diferenciaPeso / pesoPorUnidad.Value;
+                    lote.PesoDisponible += diferenciaPeso;
+                }
+                else
+                {
+                    // Sin peso por unidad: comportamiento anterior (CantidadDisponible en kg)
+                    lote.CantidadDisponible += diferenciaPeso;
+                    lote.PesoDisponible += diferenciaPeso;
+                }
+
                 await _lotesProductosRepository.UpdateAsync(lote);
 
                 try
@@ -276,6 +310,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 NombreMarca = marcasDict.ContainsKey(l.IdMarca) ? marcasDict[l.IdMarca].Nombre : "N/A",
                 CantidadInicial = l.CantidadInicial,
                 CantidadDisponible = l.CantidadDisponible,
+                PesoDisponible = l.PesoDisponible,
                 Estado = l.Estado
             }).ToList();
         }

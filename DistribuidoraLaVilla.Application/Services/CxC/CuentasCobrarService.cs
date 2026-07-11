@@ -97,6 +97,14 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
             return await MapearCuentasConClienteAsync(vencidas);
         }
 
+        public async Task<List<CuentaCobrarDTO>> ObtenerPagadasAsync()
+        {
+            var pagadas = _cxcRepo.GetByFilter(c =>
+                c.Estado == 2 || c.SaldoPendiente == 0);
+
+            return await MapearCuentasConClienteAsync(pagadas);
+        }
+
         public async Task<PagoResponseDTO> RegistrarPagoAsync(RegistrarPagoDTO dto)
         {
             if (dto.MontoPago <= 0)

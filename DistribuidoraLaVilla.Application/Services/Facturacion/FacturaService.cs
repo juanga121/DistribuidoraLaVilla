@@ -18,6 +18,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
         private readonly IGenericRepository<ClientesEntity, Guid> _clienteRepository;
         private readonly IGenericRepository<ProductosEntity, int> _productoRepository;
         private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository;
+        private readonly IGenericRepository<UsuariosEntity, Guid> _usuariosRepository;
         private readonly IGenericRepository<CuentasCobrarEntity, int> _cxcRepository;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ICuentasCobrarService _cuentasCobrarService;
@@ -31,6 +32,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             IGenericRepository<ClientesEntity, Guid> clienteRepository,
             IGenericRepository<ProductosEntity, int> productoRepository,
             IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository,
+            IGenericRepository<UsuariosEntity, Guid> usuariosRepository,
             IGenericRepository<CuentasCobrarEntity, int> cxcRepository,
             IUnitOfWork unitOfWork,
             ICuentasCobrarService cuentasCobrarService,
@@ -43,6 +45,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             _clienteRepository = clienteRepository;
             _productoRepository = productoRepository;
             _unidadMedidaRepository = unidadMedidaRepository;
+            _usuariosRepository = usuariosRepository;
             _cxcRepository = cxcRepository;
             _unitOfWork = unitOfWork;
             _cuentasCobrarService = cuentasCobrarService;
@@ -354,6 +357,17 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         };
                     }
 
+                    // Validate quantity > 0
+                    if (detalle.Cantidad <= 0)
+                    {
+                        await _unitOfWork.RollbackAsync();
+                        return new FacturaResponseDTO
+                        {
+                            Exitoso = false,
+                            Mensaje = $"La cantidad debe ser mayor a 0 para el producto '{producto.Nombre}'"
+                        };
+                    }
+
                     var esVentaPorPeso = detalle.EsVentaPorPeso ?? producto.VentaPorPeso;
 
                     // BR-VP-11: Reject zero price for weight products
@@ -374,7 +388,8 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         detalle.IdUnidadMedida,
                         idUsuario,
                         $"Venta Factura {(tipoFactura == TipoFacturaEnum.Credito ? "Crédito" : "Contado")} - Cliente: {cliente.Nombre ?? idCliente.ToString()}",
-                        esVentaPorPeso
+                        esVentaPorPeso,
+                        producto.PesoPorUnidad
                     );
 
                     decimal cantidadTotalConsumida = consumos.Sum(c => c.CantidadConsumida);
@@ -481,6 +496,14 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             var factura = await _facturaRepository.FindByIdAsync(idFactura)
                 ?? throw new InvalidOperationException($"No se encontró la factura con ID {idFactura}");
 
+            // Buscar nombre del cajero/usuario
+            string? cajeroNombre = null;
+            if (factura.IdUsuario.HasValue)
+            {
+                var usuario = await _usuariosRepository.FindByIdAsync(factura.IdUsuario.Value);
+                cajeroNombre = usuario?.Nombre ?? usuario?.Email;
+            }
+
             var detalles = _detalleRepository.GetByFilter(d => d.IdFactura == idFactura).ToList();
 
             var lineas = new List<LineaTicketDTO>();
@@ -537,7 +560,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 Descuento = 0,
                 Total = factura.Total ?? subtotal,
                 TotalEnLetras = null,
-                CajeroNombre = null,
+                CajeroNombre = cajeroNombre,
                 MensajePie = "Gracias por su compra"
             };
         }

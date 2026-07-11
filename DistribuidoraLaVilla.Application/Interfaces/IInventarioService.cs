@@ -40,6 +40,7 @@ namespace DistribuidoraLaVilla.Application.Interfaces
         /// <param name="idUsuario">Usuario que realiza la operación</param>
         /// <param name="observacion">Descripción del movimiento</param>
         /// <param name="esVentaPorPeso">Indica si la venta se realiza por peso para ese detalle</param>
+        /// <param name="pesoPorUnidad">Peso por unidad en kg (para conversión unitario↔peso)</param>
         /// <returns>Lista de consumos realizados por lote</returns>
         Task<List<ConsumoProductoDTO>> ConsumirLotesProductoAsync(
             int idProducto,
@@ -47,6 +48,7 @@ namespace DistribuidoraLaVilla.Application.Interfaces
             int idUnidadMedida,
             Guid idUsuario,
             string observacion,
-            bool esVentaPorPeso);
+            bool esVentaPorPeso,
+            decimal? pesoPorUnidad = null);
     }
 }

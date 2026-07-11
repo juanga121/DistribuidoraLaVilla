@@ -54,6 +54,9 @@ namespace DistribuidoraLaVilla.Domain.Entities.Productos
         [Column("cantidad_disponible")]
         public decimal CantidadDisponible { get; set; }
 
+        [Column("peso_disponible", TypeName = "decimal(18,4)")]
+        public decimal PesoDisponible { get; set; }
+
         [Column("estado")]
         public int Estado { get; set; }
     }

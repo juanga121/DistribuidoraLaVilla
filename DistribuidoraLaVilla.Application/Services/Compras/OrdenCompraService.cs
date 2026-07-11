@@ -1,9 +1,11 @@
+using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Domain.DTOS.Compras;
 using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Entities.Compras;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
 using DistribuidoraLaVilla.Domain.Enums;
 using DistribuidoraLaVilla.Domain.Interfaces;
+using FluentValidation;
 
 namespace DistribuidoraLaVilla.Application.Services.Compras
 {
@@ -19,9 +21,18 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
         private readonly IGenericRepository<ProveedoresEntity, Guid> _proveedorRepository = proveedorRepository;
         private readonly IGenericRepository<ProductosEntity, int> _productoRepository = productoRepository;
         private readonly IUnitOfWork _unitOfWork = unitOfWork;
+        private readonly CrearOrdenCompraDTOValidator _validator = new();
 
         public async Task<OrdenCompraResponseDTO> CrearOrdenCompraAsync(CrearOrdenCompraDTO dto, Guid idUsuario)
         {
+            // 1. Validar con FluentValidation
+            var validationResult = await _validator.ValidateAsync(dto);
+            if (!validationResult.IsValid)
+            {
+                var errores = string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage));
+                throw new ValidationException(errores);
+            }
+
             var proveedor = await _proveedorRepository.FindByIdAsync(dto.IdProveedor)
                 ?? throw new KeyNotFoundException($"No se encontró el proveedor con ID {dto.IdProveedor}");
 
@@ -53,6 +64,9 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
 
                 foreach (var det in dto.Detalles)
                 {
+                    var producto = await _productoRepository.FindByIdAsync(det.IdProducto)
+                        ?? throw new KeyNotFoundException($"No se encontró el producto con ID {det.IdProducto}");
+
                     var detalle = new DetalleCompraEntity
                     {
                         IdOrdenCompra = orden.Id,

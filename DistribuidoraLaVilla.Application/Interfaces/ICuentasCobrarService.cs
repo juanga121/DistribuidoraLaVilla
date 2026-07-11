@@ -5,8 +5,9 @@ namespace DistribuidoraLaVilla.Application.Interfaces
     public interface ICuentasCobrarService
     {
         Task<List<CuentaCobrarDTO>> ObtenerPendientesAsync();
-        Task<EstadoCuentaDTO?> ObtenerEstadoCuentaAsync(string idCliente);
         Task<List<CuentaCobrarDTO>> ObtenerVencidasAsync();
+        Task<List<CuentaCobrarDTO>> ObtenerPagadasAsync();
+        Task<EstadoCuentaDTO?> ObtenerEstadoCuentaAsync(string idCliente);
         Task<PagoResponseDTO> RegistrarPagoAsync(RegistrarPagoDTO dto);
     }
 }
