@@ -3,8 +3,8 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Facturacion
     public class CrearTicketeraDTO
     {
         public List<DetalleTicketeraDTO> Detalles { get; set; } = new();
-        public int FormaPago { get; set; } = 1; // 1=Efectivo, 2=Transferencia, 3=Tarjeta
-        public Guid? IdCliente { get; set; } // null = consumidor final
+        public int FormaPago { get; set; } = 1;
+        public Guid? IdCliente { get; set; }
     }
 
     public class DetalleTicketeraDTO

@@ -43,9 +43,11 @@ namespace DistribuidoraLaVilla.Api.Configurations
             services.AddScoped<FacturaService>();
             services.AddScoped<OrdenCompraService>();
             services.AddScoped<ICuentasCobrarService, CuentasCobrarService>();
+            services.AddScoped<ICuentasPagarService, CuentasPagarService>();
             services.AddScoped<IInventarioService, InventarioService>();
             services.AddScoped<IReportesService, ReportesService>();
             services.AddScoped<IAuditoriaService, AuditoriaService>();
+            services.AddScoped<MovimientosFinancierosService>();
             services.AddScoped<ICajaService, CajaService>();
             services.AddScoped<IRecibosCajaService, RecibosCajaService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();

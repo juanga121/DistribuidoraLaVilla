@@ -43,7 +43,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             var proveedores = (await _proveedoresRepository.GetAllAsync()).ToDictionary(p => p.IdProveedor);
             var unidades = (await _unidadMedidaRepository.GetAllAsync()).ToDictionary(u => u.Id);
 
-            // Calcular StockAnterior/StockNuevo por lote + fecha
             var stockCalculado = CalcularStockMovimientos(movimientos);
 
             return movimientos.Select(m =>
@@ -105,24 +104,20 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
         /// </summary>
         public async Task<ApiResponse<MovimientoMateriaPrimaResponseDTO>> CrearMovimientoMateriaPrimaAsync(MovimientoMateriaPrimaDTO dto)
         {
-            // 1. Validar que el lote exista
             var lote = await _lotesRepository.FindByIdAsync(dto.IdLoteMateria);
             if (lote == null)
                 return ApiResponse<MovimientoMateriaPrimaResponseDTO>.Fail("El lote de materia prima no existe");
 
-            // 2. Validar que el tipo de movimiento exista (contra BD)
             var tipoMovimiento = await _tipoMovimientoRepository.FindByIdAsync(dto.IdTipoMovimiento);
             if (tipoMovimiento == null)
                 return ApiResponse<MovimientoMateriaPrimaResponseDTO>.Fail("El tipo de movimiento no existe");
 
-            // 3. Validar cantidad > 0 (redundante con DataAnnotations, pero por seguridad)
             if (dto.Cantidad <= 0)
                 return ApiResponse<MovimientoMateriaPrimaResponseDTO>.Fail("La cantidad debe ser mayor a 0");
 
             await _unitOfWork.BeginTransactionAsync();
             try
             {
-                // 4. Validar stock si es tipo salida (Consumo=2, Vencimiento=5)
                 if (dto.IdTipoMovimiento == (int)TipoMovimientoMateriaPrima.Consumo ||
                     dto.IdTipoMovimiento == (int)TipoMovimientoMateriaPrima.Vencimiento)
                 {
@@ -133,12 +128,10 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                             $"Stock insuficiente. Disponible: {lote.CantidadDisponible}, requerido: {dto.Cantidad}");
                     }
 
-                    // Descontar del lote
                     lote.CantidadDisponible -= dto.Cantidad;
                     await _lotesRepository.UpdateAsync(lote);
                 }
 
-                // 5. Si es entrada (Entrada=1, Devolucion=4), actualizar stock del lote
                 if (dto.IdTipoMovimiento == (int)TipoMovimientoMateriaPrima.Entrada ||
                     dto.IdTipoMovimiento == (int)TipoMovimientoMateriaPrima.Devolucion)
                 {
@@ -147,7 +140,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                     await _lotesRepository.UpdateAsync(lote);
                 }
 
-                // 6. Crear la entidad del movimiento
                 var movimiento = new MovimientosMateriaPrimaEntity
                 {
                     IdLoteMateria = dto.IdLoteMateria,
@@ -171,7 +163,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                     idUnidadMedida = dto.IdUnidadMedida
                 }, dto.IdUsuario);
 
-                // 7. Mapear a response DTO
                 var responseDto = new MovimientoMateriaPrimaResponseDTO
                 {
                     Id = movimiento.Id,
@@ -251,7 +242,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 (int)TipoMovimientoMateriaPrima.Consumo => -m.Cantidad,
                 (int)TipoMovimientoMateriaPrima.Devolucion => m.Cantidad,
                 (int)TipoMovimientoMateriaPrima.Vencimiento => -m.Cantidad,
-                _ => m.Cantidad // Ajuste (3) — ya tiene el signo según la diferencia
+                _ => m.Cantidad
             };
         }
 

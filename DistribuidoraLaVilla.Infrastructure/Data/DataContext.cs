@@ -29,12 +29,10 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
         public DbSet<UsuariosEntity> Usuarios { get; set; }
         public DbSet<ClientesEntity> Clientes { get; set; }
 
-        // ── Caja ──
         public DbSet<CajaAperturaEntity> CajaAperturas { get; set; }
         public DbSet<CajaMovimientoEntity> CajaMovimientos { get; set; }
         public DbSet<ReciboEntity> Recibos { get; set; }
 
-        // ── Facturación ──
         public DbSet<FacturaEntity> Facturas { get; set; }
         public DbSet<DetalleFacturaEntity> DetallesFactura { get; set; }
         public DbSet<CuentasCobrarEntity> CuentasCobrar { get; set; }
@@ -42,17 +40,31 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
         public DbSet<EstadoFacturaEntity> EstadosFactura { get; set; }
         public DbSet<TipoFacturaEntity> TiposFactura { get; set; }
 
-        // ── Compras ──
         public DbSet<OrdenCompraEntity> OrdenesCompra { get; set; }
         public DbSet<DetalleCompraEntity> DetallesCompra { get; set; }
 
-        // ── Movimientos generales (productos terminados) ──
         public DbSet<MovimientoEntity> Movimientos { get; set; }
 
-        // ── Auditoría ──
         public DbSet<AuditoriaEntity> Auditoria { get; set; }
 
-        // ── Lookup compartidos ──
+        public DbSet<CuentasPagarEntity> CuentasPagar { get; set; }
+
+        public DbSet<MovimientosFinancierosEntity> MovimientosFinancieros { get; set; }
+
         public DbSet<EstadoEntity> Estados { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<CuentasPagarEntity>(entity =>
+            {
+                entity.HasIndex(e => new { e.Estado, e.SaldoPendiente })
+                    .HasDatabaseName("IX_cuentas_pagar_estado_saldo");
+
+                entity.HasIndex(e => e.IdProveedor)
+                    .HasDatabaseName("IX_cuentas_pagar_proveedor");
+            });
+        }
     }
 }

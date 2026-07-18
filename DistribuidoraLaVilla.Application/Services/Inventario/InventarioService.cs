@@ -21,7 +21,6 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
         private readonly IGenericRepository<MateriaPrimaEntity, int> _materiaPrimaRepository;
         private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository;
 
-        // Repositorios para productos terminados
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesProductosRepository;
         private readonly IGenericRepository<MovimientoEntity, int> _movimientosRepository;
         private readonly IGenericRepository<ProductosEntity, int> _productosRepository;
@@ -55,8 +54,6 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             Guid idUsuario,
             string observacion)
         {
-            // Si ya hay una transacción activa (ej: desde ProduccionService),
-            // participamos en ella sin crear una nueva.
             bool ownTransaction = !_unitOfWork.HasActiveTransaction;
 
             if (ownTransaction)
@@ -70,7 +67,6 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
 
                 var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
 
-                // Obtener lotes disponibles ordenados por vencimiento (FIFO)
                 var lotesDisponibles = _lotesMateriaPrimaRepository.GetByFilter(l =>
                     l.IdMateria == idMateriaPrima &&
                     l.Estado == 1 &&
@@ -89,18 +85,15 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                 var consumos = new List<ConsumoIngredienteDTO>();
                 decimal cantidadPendiente = cantidadRequerida;
 
-                // Consumir de los lotes ordenados por vencimiento (FIFO)
                 foreach (var lote in lotesDisponibles)
                 {
                     if (cantidadPendiente <= 0) break;
 
                     decimal cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
 
-                    // Descontar del lote
                     lote.CantidadDisponible -= cantidadAConsumir;
                     await _lotesMateriaPrimaRepository.UpdateAsync(lote);
 
-                    // Crear movimiento de consumo
                     var movimiento = new MovimientosMateriaPrimaEntity
                     {
                         IdLoteMateria = lote.Id,
@@ -155,21 +148,18 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             bool esVentaPorPeso,
             decimal? pesoPorUnidad = null)
         {
-            // 1. Verificar que el producto exista
             var producto = await _productosRepository.FindByIdAsync(idProducto)
                 ?? throw new InvalidOperationException(
                     $"No se encontró el producto con ID {idProducto}");
 
             var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
 
-            // 2. Obtener lotes disponibles ordenados por vencimiento (FIFO)
             var lotesDisponibles = _lotesProductosRepository.GetByFilter(l =>
                 l.IdProducto == idProducto &&
                 l.Estado == 1 &&
                 l.CantidadDisponible > 0
             ).OrderBy(l => l.FechaVencimiento).ToList();
 
-            // 3. Validar stock suficiente según modo y si existe conversión de peso
             if (pesoPorUnidad.HasValue)
             {
                 if (esVentaPorPeso)
@@ -207,7 +197,6 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             var consumos = new List<ConsumoProductoDTO>();
             decimal cantidadPendiente = cantidadRequerida;
 
-            // Consumir de los lotes ordenados por vencimiento (FIFO)
             foreach (var lote in lotesDisponibles)
             {
                 if (cantidadPendiente <= 0) break;
@@ -218,7 +207,6 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
 
                 if (pesoPorUnidad.HasValue && esVentaPorPeso)
                 {
-                    // Venta por peso: cantidadRequerida es kg
                     cantidadAConsumir = Math.Min(lote.PesoDisponible, cantidadPendiente);
                     unidadesAConsumir = cantidadAConsumir / pesoPorUnidad.Value;
                     pesoAConsumir = cantidadAConsumir;
@@ -228,7 +216,6 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                 }
                 else if (pesoPorUnidad.HasValue && !esVentaPorPeso)
                 {
-                    // Venta por unidad: cantidadRequerida es unidades
                     cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
                     unidadesAConsumir = cantidadAConsumir;
                     pesoAConsumir = cantidadAConsumir * pesoPorUnidad.Value;
@@ -238,20 +225,16 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                 }
                 else
                 {
-                    // Sin pesoPorUnidad: comportamiento anterior
                     cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
                     lote.CantidadDisponible -= cantidadAConsumir;
                 }
 
                 await _lotesProductosRepository.UpdateAsync(lote);
 
-                // 5. Crear registro en movimientos (tipo_movimiento = 2 Venta)
-                // 6. Calcular total_movimiento = cantidad * PrecioKilo (weight) or PrecioUnitario (unit)
                 var costBasis = esVentaPorPeso
                     ? lote.PrecioKilo
                     : lote.PrecioUnitario;
 
-                // BR-VP-06: Validate PrecioKilo > 0 for weight products
                 if (esVentaPorPeso && lote.PrecioKilo <= 0)
                 {
                     throw new InvalidOperationException(
@@ -266,7 +249,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                     Cantidad = cantidadAConsumir,
                     TotalMovimiento = cantidadAConsumir * costBasis,
                     IdUnidadMedida = idUnidadMedida,
-                    IdEntidad = null, // se asigna en FacturaService si se quiere vincular al cliente
+                    IdEntidad = null,
                     IdUsuario = idUsuario,
                     Observacion = observacion,
                     Estado = 1
@@ -288,7 +271,6 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                 cantidadPendiente -= cantidadAConsumir;
             }
 
-            // 9. Retornar lista de ConsumoProductoDTO
             return consumos;
         }
     }

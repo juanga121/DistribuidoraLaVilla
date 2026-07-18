@@ -20,7 +20,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
         public async Task CrearProductoAsync(ProductoDTO productoDTO, Guid idUsuario)
         {
-            // BR-VP-01: If VentaPorPeso=true, PrecioPorKilo must be > 0
             if (productoDTO.VentaPorPeso && (productoDTO.PrecioPorKilo == null || productoDTO.PrecioPorKilo <= 0))
                 throw new ArgumentException("El precio por kilo es obligatorio y debe ser mayor a 0 cuando el producto se vende por peso");
 
@@ -89,7 +88,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
         public async Task ActualizarProducto(int idProducto, ProductoDTO productoDTO, Guid idUsuario)
         {
-            // BR-VP-01: If VentaPorPeso=true, PrecioPorKilo must be > 0
             if (productoDTO.VentaPorPeso && (productoDTO.PrecioPorKilo == null || productoDTO.PrecioPorKilo <= 0))
                 throw new ArgumentException("El precio por kilo es obligatorio y debe ser mayor a 0 cuando el producto se vende por peso");
 
@@ -110,7 +108,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 try
                 {
-                    // Registrar cambio de precio si corresponde
                     if (precioAnterior != productoDTO.PrecioUnitario || precioPorKiloAnterior != productoDTO.PrecioPorKilo)
                     {
                         var detallePrecio = JsonSerializer.Serialize(new

@@ -165,17 +165,15 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
 
                 if (cxc.SaldoPendiente == 0)
                 {
-                    cxc.Estado = 2; // Pagada
+                    cxc.Estado = 2;
                 }
 
                 await _cxcRepo.UpdateAsync(cxc);
 
-                // ── Fetch datos para el recibo ──
                 var cliente = cxc.IdCliente.HasValue
                     ? await _clienteRepo.FindByIdAsync(cxc.IdCliente.Value)
                     : null;
 
-                // ── Crear recibo ──
                 var recibo = new ReciboEntity
                 {
                     IdPago = pago.Id,

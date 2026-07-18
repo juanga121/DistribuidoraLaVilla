@@ -34,7 +34,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
         public async Task CrearLoteProductoAsync(LotesProductosDTO lotesProductosDTO)
         {
-            // Validación
             var validator = new LotesProductosDTOValidator();
             var validationResult = await validator.ValidateAsync(lotesProductosDTO);
 
@@ -48,7 +47,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto);
             var pesoPorUnidad = producto?.PesoPorUnidad;
 
-            // Calcular CantidadDisponible y PesoDisponible según si el producto tiene peso por unidad
             decimal cantidadDisponible;
             decimal pesoDisponible;
             if (pesoPorUnidad.HasValue)
@@ -95,7 +93,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             }
             catch { /* fire-and-forget */ }
 
-            // Auto-generar movimiento de entrada
             var movimiento = new MovimientosProductosEntity
             {
                 IdLoteProducto = entity.Id,
@@ -147,7 +144,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 }
                 catch { /* fire-and-forget */ }
 
-                // Si se da de baja (estado = 0), auto-generar movimiento de vencimiento
                 if (actualizarEstadoDTO.EstadoNuevo == 0 && estadoAnterior != 0)
                 {
                     var movimiento = new MovimientosProductosEntity
@@ -173,7 +169,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
         public async Task ActualizarLoteProducto(int id, LotesProductosDTO lotesProductosDTO)
         {
-            // Validación
             var validator = new LotesProductosDTOValidator();
             var validationResult = await validator.ValidateAsync(lotesProductosDTO);
 
@@ -185,7 +180,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             var lote = await _lotesProductosRepository.FindByIdAsync(id);
             if (lote != null)
             {
-                // Calculamos la diferencia para ajustar CantidadDisponible y PesoDisponible
                 var diferenciaPeso = lotesProductosDTO.PesoTotal - lote.PesoTotal;
 
                 var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto);
@@ -206,13 +200,11 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 if (pesoPorUnidad.HasValue)
                 {
-                    // Para productos con peso por unidad, CantidadDisponible es unidades y PesoDisponible es kg
                     lote.CantidadDisponible += diferenciaPeso / pesoPorUnidad.Value;
                     lote.PesoDisponible += diferenciaPeso;
                 }
                 else
                 {
-                    // Sin peso por unidad: comportamiento anterior (CantidadDisponible en kg)
                     lote.CantidadDisponible += diferenciaPeso;
                     lote.PesoDisponible += diferenciaPeso;
                 }
@@ -244,7 +236,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             var existente = await _lotesProductosRepository.FindByIdAsync(idLote);
             if (existente != null)
             {
-                // Auto-generar movimiento de ajuste antes de eliminar
                 var movimiento = new MovimientosProductosEntity
                 {
                     IdLoteProducto = existente.Id,

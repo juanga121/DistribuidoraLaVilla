@@ -97,7 +97,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             return [.. resultado.Where(c => c.Estado == 1)];
         }
 
-        // New: delete category by id using generic repository
         public async Task EliminarCategoriaAsync(int idCategoria, Guid idUsuario)
         {
             var existente = await _categoriasMateriaPrima.FindByIdAsync(idCategoria);

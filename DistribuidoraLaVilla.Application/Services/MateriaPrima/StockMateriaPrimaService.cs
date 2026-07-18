@@ -29,7 +29,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
         /// </summary>
         public async Task<List<StockMateriaPrimaDTO>> ObtenerStockConsolidadoAsync()
         {
-            // 1. Obtener todos los lotes activos con stock disponible
             var lotesActivos = _lotesRepository.GetByFilter(l => 
                 l.Estado == 1 && 
                 l.CantidadDisponible > 0
@@ -40,17 +39,14 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 return new List<StockMateriaPrimaDTO>();
             }
 
-            // 2. Obtener todas las materias primas activas
             var materiasPrimas = await _materiaPrimaRepository.GetAllAsync();
             var materiasPrimasDict = materiasPrimas
                 .Where(mp => mp.Estado == 1)
                 .ToDictionary(mp => mp.Id, mp => mp);
 
-            // 3. Obtener todas las unidades de medida
             var unidadesMedida = await _unidadMedidaRepository.GetAllAsync();
             var unidadesMedidaDict = unidadesMedida.ToDictionary(um => um.Id, um => um);
 
-            // 4. Agrupar lotes por materia prima y calcular stock
             var stockPorMateria = lotesActivos
                 .Where(l => materiasPrimasDict.ContainsKey(l.IdMateria))
                 .GroupBy(l => l.IdMateria)
@@ -102,14 +98,12 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
         /// </summary>
         public async Task<StockMateriaPrimaDTO?> ObtenerStockPorIdAsync(int idMateriaPrima)
         {
-            // 1. Verificar que la materia prima exista y esté activa
             var materiaPrima = await _materiaPrimaRepository.FindByIdAsync(idMateriaPrima);
             if (materiaPrima == null || materiaPrima.Estado != 1)
             {
                 return null;
             }
 
-            // 2. Obtener lotes activos de esta materia prima
             var lotesActivos = _lotesRepository.GetByFilter(l => 
                 l.IdMateria == idMateriaPrima && 
                 l.Estado == 1 && 
@@ -118,8 +112,7 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 
             if (!lotesActivos.Any())
             {
-                // Retorna materia prima con stock 0
-                var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(1); // Default
+                var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(1);
                 return new StockMateriaPrimaDTO
                 {
                     IdMateriaPrima = materiaPrima.Id,
@@ -134,11 +127,9 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 };
             }
 
-            // 3. Obtener unidad de medida
             var idUnidadMedida = lotesActivos.First().IdUnidadMedida;
             var unidad = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
 
-            // 4. Construir DTO
             var stock = new StockMateriaPrimaDTO
             {
                 IdMateriaPrima = materiaPrima.Id,

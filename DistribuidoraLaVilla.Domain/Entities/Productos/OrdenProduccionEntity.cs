@@ -36,6 +36,6 @@ namespace DistribuidoraLaVilla.Domain.Entities.Productos
         public string? Observaciones { get; set; }
 
         [Column("estado")]
-        public int Estado { get; set; } // 1=Pendiente, 2=Completada, 0=Cancelada
+        public int Estado { get; set; }
     }
 }

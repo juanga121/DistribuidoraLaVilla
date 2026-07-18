@@ -42,7 +42,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         /// </summary>
         public async Task<RecetaProductoResponseDTO> CrearRecetaAsync(RecetaProductoDTO dto, Guid idUsuario)
         {
-            // 1. Validar con FluentValidation
             var validationResult = await _validator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
@@ -50,28 +49,24 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 throw new ValidationException(errores);
             }
 
-            // 2. Verificar que el producto exista
             var producto = await _productosRepository.FindByIdAsync(dto.IdProducto);
             if (producto == null)
             {
                 throw new InvalidOperationException($"No se encontró el producto con ID {dto.IdProducto}");
             }
 
-            // 3. Verificar que la materia prima exista
             var materiaPrima = await _materiaPrimaRepository.FindByIdAsync(dto.IdMateriaPrima);
             if (materiaPrima == null)
             {
                 throw new InvalidOperationException($"No se encontró la materia prima con ID {dto.IdMateriaPrima}");
             }
 
-            // 4. Verificar que la unidad de medida exista
             var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(dto.IdUnidadMedida);
             if (unidadMedida == null)
             {
                 throw new InvalidOperationException($"No se encontró la unidad de medida con ID {dto.IdUnidadMedida}");
             }
 
-            // 5. Validar que no exista una receta con la misma combinación producto-materia prima
             var recetaExistente = _recetaRepository.GetByFilter(r =>
                 r.IdProducto == dto.IdProducto &&
                 r.IdMateriaPrima == dto.IdMateriaPrima &&
@@ -86,7 +81,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 );
             }
 
-            // 6. Crear la entidad
             var receta = new RecetaProductoEntity
             {
                 IdProducto = dto.IdProducto,
@@ -96,11 +90,9 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 Estado = 1
             };
 
-            // 7. Guardar en repositorio
             await _recetaRepository.CreateAsync(receta);
             await RegistrarAuditoriaAsync("RecetaProducto", receta.Id.ToString(), "Crear", new { idProducto = receta.IdProducto, idMateriaPrima = receta.IdMateriaPrima, cantidadRequerida = receta.CantidadRequerida, idUnidadMedida = receta.IdUnidadMedida }, idUsuario);
 
-            // 8. Retornar respuesta completa
             return new RecetaProductoResponseDTO
             {
                 IdReceta = receta.Id,
@@ -212,7 +204,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         /// </summary>
         public async Task<RecetaProductoResponseDTO> ActualizarRecetaAsync(int id, RecetaProductoDTO dto, Guid idUsuario)
         {
-            // 1. Validar DTO
             var validationResult = await _validator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
@@ -220,14 +211,12 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 throw new ValidationException(errores);
             }
 
-            // 2. Verificar que la receta exista
             var receta = await _recetaRepository.FindByIdAsync(id);
             if (receta == null)
             {
                 throw new InvalidOperationException($"No se encontró la receta con ID {id}");
             }
 
-            // 3. Verificar que no exista otra receta con la misma combinación (excluir la actual)
             var recetaDuplicada = _recetaRepository.GetByFilter(r =>
                 r.IdProducto == dto.IdProducto &&
                 r.IdMateriaPrima == dto.IdMateriaPrima &&
@@ -245,17 +234,14 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 );
             }
 
-            // 4. Actualizar campos
             receta.IdProducto = dto.IdProducto;
             receta.IdMateriaPrima = dto.IdMateriaPrima;
             receta.CantidadRequerida = dto.CantidadRequerida;
             receta.IdUnidadMedida = dto.IdUnidadMedida;
 
-            // 5. Guardar cambios
             await _recetaRepository.UpdateAsync(receta);
             await RegistrarAuditoriaAsync("RecetaProducto", receta.Id.ToString(), "Modificar", new { idProducto = receta.IdProducto, idMateriaPrima = receta.IdMateriaPrima, cantidadRequerida = receta.CantidadRequerida, idUnidadMedida = receta.IdUnidadMedida }, idUsuario);
 
-            // 6. Retornar respuesta completa
             var producto2 = await _productosRepository.FindByIdAsync(receta.IdProducto);
             var materiaPrima2 = await _materiaPrimaRepository.FindByIdAsync(receta.IdMateriaPrima);
             var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(receta.IdUnidadMedida);

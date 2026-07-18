@@ -29,7 +29,6 @@ namespace DistribuidoraLaVilla.Application.Validators.Productos
                 .NotEmpty()
                 .WithMessage("El ID del usuario es obligatorio");
 
-            // Observación obligatoria para Ajuste (3) y Vencimiento (5)
             RuleFor(x => x.Observacion)
                 .NotEmpty()
                 .WithMessage("La observación es obligatoria para movimientos de tipo Ajuste o Vencimiento")
@@ -41,13 +40,11 @@ namespace DistribuidoraLaVilla.Application.Validators.Productos
                 .WithMessage("La observación no puede exceder los 500 caracteres")
                 .When(x => !string.IsNullOrEmpty(x.Observacion));
 
-            // IdCliente obligatorio para Venta
             RuleFor(x => x.IdCliente)
                 .NotEmpty()
                 .WithMessage("El ID del cliente es obligatorio para movimientos de tipo Venta")
                 .When(x => x.TipoMovimiento == (int)TipoMovimientoProducto.Venta);
 
-            // IdProveedor obligatorio para Entrada
             RuleFor(x => x.IdProveedor)
                 .NotEmpty()
                 .WithMessage("El ID del proveedor es obligatorio para movimientos de tipo Entrada")

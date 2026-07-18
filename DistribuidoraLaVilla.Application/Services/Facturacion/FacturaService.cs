@@ -67,9 +67,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
 
         public async Task<FacturaResponseDTO> CrearFacturaCreditoAsync(CrearFacturaCreditoDTO solicitud)
         {
-            // ── Validaciones específicas de crédito ──
-
-            // Validar cliente
             var cliente = await _clienteRepository.FindByIdAsync(solicitud.IdCliente);
             if (cliente == null)
             {
@@ -80,7 +77,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 };
             }
 
-            // BR-01: Cliente sin LimiteCredito no puede comprar a crédito
             if (cliente.LimiteCredito == null)
             {
                 return new FacturaResponseDTO
@@ -90,7 +86,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 };
             }
 
-            // Validar detalles
             if (solicitud.Detalles == null || solicitud.Detalles.Count == 0)
             {
                 return new FacturaResponseDTO
@@ -100,11 +95,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 };
             }
 
-            // ── Validar productos y calcular total estimado para crédito ──
-            // NOTA: Este es un cálculo estimado (Cantidad × Precio del DTO).
-            // El total REAL se calcula en CrearFacturaBaseAsync usando la cantidad
-            // realmente consumida del inventario (FIFO). Esta validación es un guard
-            // contra el límite de crédito, no el monto final.
             decimal totalEstimado = 0;
             foreach (var detalle in solicitud.Detalles)
             {
@@ -120,7 +110,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 totalEstimado += detalle.Cantidad * detalle.Precio;
             }
 
-            // Calcular crédito disponible
             var cxcCliente = _cxcRepository.GetByFilter(c =>
                 c.IdCliente == solicitud.IdCliente &&
                 c.Estado == 1);
@@ -128,7 +117,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             var saldoPendienteTotal = cxcCliente.Sum(c => c.SaldoPendiente ?? 0);
             var creditoDisponible = cliente.LimiteCredito.Value - saldoPendienteTotal;
 
-            // BR-02: Total no debe exceder límite disponible
             if (totalEstimado > creditoDisponible)
             {
                 return new FacturaResponseDTO
@@ -138,7 +126,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 };
             }
 
-            // BR-03: DiasCredito del DTO o del cliente por defecto
             var diasCredito = solicitud.DiasCredito ?? cliente.DiasCredito ?? 30;
 
             return await CrearFacturaBaseAsync(
@@ -189,7 +176,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
         /// </summary>
         public async Task<TicketeraResultDTO> CrearTicketeraAsync(CrearTicketeraDTO dto, Guid idUsuario)
         {
-            // ── 1. Resolver cliente ──
             Guid idCliente;
             string nombreCliente;
 
@@ -206,11 +192,9 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 idCliente = await ObtenerOCrearConsumidorFinalAsync();
             }
 
-            // ── 2. Validar detalles ──
             if (dto.Detalles == null || dto.Detalles.Count == 0)
                 throw new InvalidOperationException("La factura debe contener al menos un detalle");
 
-            // ── 3. Map DetalleTicketeraDTO → CrearDetalleFacturaDTO ──
             var detalles = dto.Detalles.Select(d => new CrearDetalleFacturaDTO
             {
                 IdProducto = d.IdProducto,
@@ -220,7 +204,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 EsVentaPorPeso = d.EsVentaPorPeso
             }).ToList();
 
-            // ── 4. Crear factura (reusa la lógica transaccional base) ──
             var resultado = await CrearFacturaBaseAsync(
                 idCliente,
                 idUsuario,
@@ -246,7 +229,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             }
             catch { /* fire-and-forget */ }
 
-            // ── 5. Mapear a TicketeraResultDTO ──
             var ticket = resultado.Ticket;
             var facturaCreada = await _facturaRepository.FindByIdAsync(resultado.IdFactura);
 
@@ -314,8 +296,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             TipoFacturaEnum tipoFactura,
             int? diasCredito)
         {
-            // ── Validaciones comunes ──
-
             var cliente = await _clienteRepository.FindByIdAsync(idCliente);
             if (cliente == null)
             {
@@ -335,12 +315,10 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 };
             }
 
-            // ── Transacción ──
             await _unitOfWork.BeginTransactionAsync();
 
             try
             {
-                // ── Procesar detalles y consumir inventario ──
                 var detallesEntidad = new List<DetalleFacturaEntity>();
                 decimal totalFactura = 0;
 
@@ -357,7 +335,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         };
                     }
 
-                    // Validate quantity > 0
                     if (detalle.Cantidad <= 0)
                     {
                         await _unitOfWork.RollbackAsync();
@@ -370,7 +347,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
 
                     var esVentaPorPeso = detalle.EsVentaPorPeso ?? producto.VentaPorPeso;
 
-                    // BR-VP-11: Reject zero price for weight products
                     if (esVentaPorPeso && detalle.Precio <= 0)
                     {
                         await _unitOfWork.RollbackAsync();
@@ -381,7 +357,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         };
                     }
 
-                    // Consumir lotes usando FIFO
                     var consumos = await _inventarioService.ConsumirLotesProductoAsync(
                         detalle.IdProducto,
                         detalle.Cantidad,
@@ -412,7 +387,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                     totalFactura += subtotal;
                 }
 
-                // ── Crear factura ──
                 var factura = new FacturaEntity
                 {
                     IdCliente = idCliente,
@@ -422,19 +396,17 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                     FormaPago = formaPago,
                     MetodoPago = metodoPago,
                     Total = totalFactura,
-                    Estado = 1 // Activo
+                    Estado = 1
                 };
 
                 await _facturaRepository.CreateAsync(factura);
 
-                // ── Crear detalles ──
                 foreach (var detalleEntidad in detallesEntidad)
                 {
                     detalleEntidad.IdFactura = factura.Id;
                     await _detalleRepository.CreateAsync(detalleEntidad);
                 }
 
-                // ── Si es crédito, crear CuentasCobrarEntity ──
                 if (tipoFactura == TipoFacturaEnum.Credito && diasCredito.HasValue)
                 {
                     var cxc = new CuentasCobrarEntity
@@ -445,7 +417,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         FechaVencimiento = DateTime.Now.AddDays(diasCredito.Value),
                         MontoTotal = totalFactura,
                         SaldoPendiente = totalFactura,
-                        Estado = 1 // Pendiente
+                        Estado = 1
                     };
 
                     await _cxcRepository.CreateAsync(cxc);
@@ -472,7 +444,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 }
                 catch { /* fire-and-forget */ }
 
-                // ── Generar ticket ──
                 var ticket = await GenerarTicketAsync(factura.Id, cliente);
 
                 return new FacturaResponseDTO
@@ -496,7 +467,6 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
             var factura = await _facturaRepository.FindByIdAsync(idFactura)
                 ?? throw new InvalidOperationException($"No se encontró la factura con ID {idFactura}");
 
-            // Buscar nombre del cajero/usuario
             string? cajeroNombre = null;
             if (factura.IdUsuario.HasValue)
             {

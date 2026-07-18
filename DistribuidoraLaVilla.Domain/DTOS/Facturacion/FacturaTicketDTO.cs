@@ -11,37 +11,31 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Facturacion
     /// </summary>
     public class FacturaTicketDTO
     {
-        // ── Cabecera ──
         public string? EmpresaNombre { get; set; }
         public string? EmpresaDireccion { get; set; }
         public string? EmpresaTelefono { get; set; }
         public string? EmpresaCuit { get; set; }
         public string? EmpresaEmail { get; set; }
 
-        // ── Factura ──
         public int IdFactura { get; set; }
         public string? NumeroFactura { get; set; }
         public string? Fecha { get; set; }
-        public string? TipoFactura { get; set; }      // Contado / Crédito
-        public string? FormaPago { get; set; }         // Efectivo / Transferencia / etc
+        public string? TipoFactura { get; set; }
+        public string? FormaPago { get; set; }
         public string? MetodoPago { get; set; }
 
-        // ── Cliente ──
         public string? ClienteNombre { get; set; }
         public string? ClienteDocumento { get; set; }
         public string? ClienteDireccion { get; set; }
         public string? ClienteTelefono { get; set; }
 
-        // ── Líneas ──
         public List<LineaTicketDTO> Lineas { get; set; } = new();
 
-        // ── Totales ──
         public decimal Subtotal { get; set; }
         public decimal Descuento { get; set; }
         public decimal Total { get; set; }
         public string? TotalEnLetras { get; set; }
 
-        // ── Pie ──
         public string? CajeroNombre { get; set; }
         public string? MensajePie { get; set; }
     }

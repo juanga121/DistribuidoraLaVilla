@@ -61,7 +61,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
             try
             {
-                // 1. Validar entrada
                 var validationResult = await _validator.ValidateAsync(solicitud);
                 if (!validationResult.IsValid)
                 {
@@ -69,14 +68,12 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     throw new ValidationException(errores);
                 }
 
-                // 2. Verificar que el producto exista
                 var producto = await _productosRepository.FindByIdAsync(solicitud.IdProducto);
                 if (producto == null || producto.Estado != 1)
                 {
                     throw new InvalidOperationException($"No se encontró el producto con ID {solicitud.IdProducto} o está inactivo");
                 }
 
-                // 3. Obtener receta del producto
                 var recetas = _recetaRepository.GetByFilter(r =>
                     r.IdProducto == solicitud.IdProducto && r.Estado == 1);
 
@@ -88,7 +85,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     );
                 }
 
-                // 4. Calcular cantidades necesarias de cada ingrediente
                 var ingredientesNecesarios = recetas.Select(r => new
                 {
                     r.IdMateriaPrima,
@@ -97,7 +93,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     r.IdUnidadMedida
                 }).ToList();
 
-                // 5. Crear orden de producción
                 var orden = new OrdenProduccionEntity
                 {
                     IdProducto = solicitud.IdProducto,
@@ -106,12 +101,11 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     FechaOrden = DateTime.Now,
                     IdUsuario = solicitud.IdUsuario,
                     Observaciones = solicitud.Observaciones,
-                    Estado = 1 // Pendiente
+                    Estado = 1
                 };
 
                 await _ordenRepository.CreateAsync(orden);
 
-                // 6. Consumir materia prima de lotes usando FIFO (servicio compartido)
                 var ingredientesConsumidos = new List<ConsumoIngredienteDTO>();
 
                 foreach (var ingrediente in ingredientesNecesarios)
@@ -127,20 +121,19 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     ingredientesConsumidos.AddRange(consumos);
                 }
 
-                // 7. Crear lote de producto terminado
                 var nuevoLoteProducto = new LotesProductosEntity
                 {
                     IdProducto = solicitud.IdProducto,
-                    IdProveedor = Guid.Empty, // Producción interna
+                    IdProveedor = Guid.Empty,
                     FechaEntrada = DateTime.Now,
-                    FechaVencimiento = DateTime.Now.AddMonths(6), // Default 6 meses
+                    FechaVencimiento = DateTime.Now.AddMonths(6),
                     CantidadUnidades = (int)solicitud.CantidadProducir,
                     PesoTotal = solicitud.CantidadProducir,
                     IdUnidadMedida = solicitud.IdUnidadMedida,
                     PrecioUnitario = producto.PrecioUnitario,
                     PrecioKilo = producto.PrecioUnitario,
                     PrecioTotal = producto.PrecioUnitario * solicitud.CantidadProducir,
-                    IdMarca = 1, // Default o configurar según negocio
+                    IdMarca = 1,
                     CantidadInicial = solicitud.CantidadProducir,
                     CantidadDisponible = solicitud.CantidadProducir,
                     Estado = 1
@@ -148,7 +141,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 await _lotesProductosRepository.CreateAsync(nuevoLoteProducto);
 
-                // 8. Crear movimiento de entrada de producto
                 var movimientoEntradaProducto = new MovimientosProductosEntity
                 {
                     IdLoteProducto = nuevoLoteProducto.Id,
@@ -166,13 +158,11 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 await _movimientosProductosRepository.CreateAsync(movimientoEntradaProducto);
 
-                // 9. Actualizar orden como completada
                 orden.FechaCompletada = DateTime.Now;
                 orden.IdLoteGenerado = nuevoLoteProducto.Id;
-                orden.Estado = 2; // Completada
+                orden.Estado = 2;
                 await _ordenRepository.UpdateAsync(orden);
 
-                // 10. Construir respuesta exitosa
                 var unidadMedidaProducto = await _unidadMedidaRepository.FindByIdAsync(solicitud.IdUnidadMedida);
 
                 await _unitOfWork.CommitAsync();

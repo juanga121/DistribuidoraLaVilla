@@ -7,8 +7,6 @@ using DistribuidoraLaVilla.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 var connectionString = builder.Configuration.GetConnectionString("ConexionDB");
 builder.Services.AddDbContext<DataContext>(options => options.UseSqlServer(connectionString));
 
@@ -20,7 +18,6 @@ builder.Services.AddCors(options =>
     });
 });
 
-// JWT Authentication
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key not configured");
 builder.Services.AddAuthentication(options =>
 {
@@ -42,7 +39,6 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -74,7 +70,6 @@ builder.Services.AddRepositoryDependency();
 
 var app = builder.Build();
 
-// Auto-apply pending migrations on startup
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
@@ -82,7 +77,6 @@ if (app.Environment.IsDevelopment())
     await dbContext.Database.MigrateAsync();
 }
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

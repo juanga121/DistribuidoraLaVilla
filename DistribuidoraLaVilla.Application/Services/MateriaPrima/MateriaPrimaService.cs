@@ -80,7 +80,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
             return materiaPrimaDisponible;
         }
 
-        // New: delete materia prima by id using generic repository
         public async Task EliminarMateriaPrimaAsync(int idMateriaPrima, Guid idUsuario)
         {
             var existente = await _materiaPrima.FindByIdAsync(idMateriaPrima);

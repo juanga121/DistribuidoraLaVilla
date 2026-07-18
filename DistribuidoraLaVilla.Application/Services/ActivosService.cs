@@ -4,9 +4,10 @@ using DistribuidoraLaVilla.Domain.Interfaces;
 
 namespace DistribuidoraLaVilla.Application.Services
 {
-    public class ActivosService(IGenericRepository<ActivosEntity, int> activosRepository)
+    public class ActivosService(IGenericRepository<ActivosEntity, int> activosRepository, MovimientosFinancierosService movimientosService)
     {
         private readonly IGenericRepository<ActivosEntity, int> _activosRepository = activosRepository;
+        private readonly MovimientosFinancierosService _movimientosService = movimientosService;
 
         public async Task CrearActivoAsync(ActivosDTO activosDTO, Guid idUsuario)
         {
@@ -22,6 +23,19 @@ namespace DistribuidoraLaVilla.Application.Services
             };
 
             await _activosRepository.CreateAsync(activo);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Activo",
+                SubTipo = "Creacion",
+                Descripcion = $"Creación de activo: {activo.Nombre}",
+                Monto = activo.Monto,
+                Direccion = "Neutro",
+                OrigenModulo = "Activos",
+                ReferenciaId = activo.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, idUsuario);
         }
 
         public async Task<List<ActivosEntity>> ObtenerActivosAsync()
@@ -51,6 +65,19 @@ namespace DistribuidoraLaVilla.Application.Services
             activo.IdUsuario = idUsuario == Guid.Empty ? activo.IdUsuario : idUsuario;
 
             await _activosRepository.UpdateAsync(activo);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Activo",
+                SubTipo = "Ajuste",
+                Descripcion = $"Ajuste de activo: {activo.Nombre}",
+                Monto = activo.Monto,
+                Direccion = "Neutro",
+                OrigenModulo = "Activos",
+                ReferenciaId = activo.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, idUsuario);
         }
 
         public async Task EliminarActivoAsync(int id)
@@ -62,6 +89,19 @@ namespace DistribuidoraLaVilla.Application.Services
             }
 
             await _activosRepository.DeleteAsync(id);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Activo",
+                SubTipo = "Baja",
+                Descripcion = $"Baja de activo: {existente.Nombre}",
+                Monto = existente.Monto,
+                Direccion = "Egreso",
+                OrigenModulo = "Activos",
+                ReferenciaId = existente.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, existente.IdUsuario ?? Guid.Empty);
         }
     }
 }

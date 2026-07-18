@@ -5,9 +5,10 @@ using DistribuidoraLaVilla.Domain.Interfaces;
 
 namespace DistribuidoraLaVilla.Application.Services
 {
-    public class PasivosService(IGenericRepository<PasivosEntity, int> pasivosRepository)
+    public class PasivosService(IGenericRepository<PasivosEntity, int> pasivosRepository, MovimientosFinancierosService movimientosService)
     {
         private readonly IGenericRepository<PasivosEntity, int> _pasivosRepository = pasivosRepository;
+        private readonly MovimientosFinancierosService _movimientosService = movimientosService;
 
         public async Task CrearPasivoAsync(PasivosDTO pasivosDTO, Guid idUsuario)
         {
@@ -23,6 +24,19 @@ namespace DistribuidoraLaVilla.Application.Services
             };
 
             await _pasivosRepository.CreateAsync(pasivo);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Pasivo",
+                SubTipo = "Creacion",
+                Descripcion = $"Creación de pasivo: {pasivo.Nombre}",
+                Monto = pasivo.Monto,
+                Direccion = "Egreso",
+                OrigenModulo = "Pasivos",
+                ReferenciaId = pasivo.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, idUsuario);
         }
 
         public async Task<List<PasivosEntity>> ObtenerPasivosAsync()
@@ -52,6 +66,19 @@ namespace DistribuidoraLaVilla.Application.Services
             pasivo.IdUsuario = idUsuario == Guid.Empty ? pasivo.IdUsuario : idUsuario;
 
             await _pasivosRepository.UpdateAsync(pasivo);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Pasivo",
+                SubTipo = "Ajuste",
+                Descripcion = $"Ajuste de pasivo: {pasivo.Nombre}",
+                Monto = pasivo.Monto,
+                Direccion = "Neutro",
+                OrigenModulo = "Pasivos",
+                ReferenciaId = pasivo.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, idUsuario);
         }
 
         public async Task EliminarPasivoAsync(int id)
@@ -63,6 +90,19 @@ namespace DistribuidoraLaVilla.Application.Services
             }
 
             await _pasivosRepository.DeleteAsync(id);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Pasivo",
+                SubTipo = "Baja",
+                Descripcion = $"Baja de pasivo: {existente.Nombre}",
+                Monto = existente.Monto,
+                Direccion = "Ingreso",
+                OrigenModulo = "Pasivos",
+                ReferenciaId = existente.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, existente.IdUsuario ?? Guid.Empty);
         }
     }
 }

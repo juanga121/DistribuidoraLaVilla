@@ -4,19 +4,14 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Reportes
     {
         public string Fecha { get; set; } = string.Empty;
 
-        // Facturación
         public ResumenFacturasDTO Facturas { get; set; } = new();
 
-        // Materia Prima
         public ResumenMovimientosMPDTO MateriaPrima { get; set; } = new();
 
-        // Productos
         public ResumenMovimientosProductosDTO Productos { get; set; } = new();
 
-        // CxC
         public ResumenCxcDiarioDTO CuentasCobrar { get; set; } = new();
 
-        // Alertas
         public List<string> Alertas { get; set; } = new();
     }
 

@@ -34,7 +34,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 
         public async Task CrearLoteMateriaPrimaAsync(LotesMateriaPrimaDTO lotesMateriaPrimaDTO)
         {
-            // Validación (fuera de tx — no modifica estado)
             var validator = new LotesMateriaPrimaDTOValidator();
             var validationResult = await validator.ValidateAsync(lotesMateriaPrimaDTO);
 
@@ -65,7 +64,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 };
                 await _lotesMateriaPrimaRepository.CreateAsync(entity);
 
-                // Auditoría: fire-and-forget (no debe romper la tx si falla)
                 try
                 {
                     var detalle = JsonSerializer.Serialize(new
@@ -80,7 +78,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 }
                 catch { /* fire-and-forget */ }
 
-                // Auto-generar movimiento de entrada (misma tx)
                 var movimiento = new MovimientosMateriaPrimaEntity
                 {
                     IdLoteMateria = entity.Id,
@@ -181,7 +178,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 }
                 catch { /* fire-and-forget */ }
 
-                // Si se marca como vencido, auto-generar movimiento de vencimiento
                 if (estadoNuevo == 4 && estadoAnterior != 4)
                 {
                     var movimiento = new MovimientosMateriaPrimaEntity
@@ -205,7 +201,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
 
         public async Task ActualizarLoteMateriaPrima(int id, LotesMateriaPrimaDTO lotesMateriaPrimaDTO)
         {
-            // Validación (fuera de tx — no modifica estado)
             var validator = new LotesMateriaPrimaDTOValidator();
             var validationResult = await validator.ValidateAsync(lotesMateriaPrimaDTO);
 
@@ -220,10 +215,8 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                 var lote = await _lotesMateriaPrimaRepository.FindByIdAsync(id);
                 if (lote != null)
                 {
-                    // Guardar cantidad anterior ANTES de modificar
                     var cantidadAnterior = lote.Cantidad;
 
-                    // Calculamos la diferencia para ajustar CantidadDisponible
                     var diferenciaCantidad = lotesMateriaPrimaDTO.Cantidad - cantidadAnterior;
 
                     lote.IdMarca = lotesMateriaPrimaDTO.IdMarca;
@@ -239,7 +232,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                     lote.CantidadDisponible += diferenciaCantidad;
                     await _lotesMateriaPrimaRepository.UpdateAsync(lote);
 
-                    // Si la cantidad cambió, crear movimiento de ajuste (REQ-AL-01)
                     if (diferenciaCantidad != 0)
                     {
                         var movimientoAjuste = new MovimientosMateriaPrimaEntity
@@ -255,7 +247,6 @@ namespace DistribuidoraLaVilla.Application.Services.MateriaPrima
                         await _movimientosMateriaPrimaRepository.CreateAsync(movimientoAjuste);
                     }
 
-                    // Auditoría: fire-and-forget (no debe romper la tx si falla)
                     try
                     {
                         var detalle = JsonSerializer.Serialize(new

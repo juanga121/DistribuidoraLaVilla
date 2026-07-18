@@ -25,7 +25,6 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
 
         public async Task<OrdenCompraResponseDTO> CrearOrdenCompraAsync(CrearOrdenCompraDTO dto, Guid idUsuario)
         {
-            // 1. Validar con FluentValidation
             var validationResult = await _validator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
@@ -40,7 +39,6 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
 
             try
             {
-                // Calcular subtotal total
                 decimal subtotalTotal = 0;
                 foreach (var det in dto.Detalles)
                 {
@@ -155,9 +153,9 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
         {
             bool valida = (desde, hacia) switch
             {
-                (1, 2) => true,  // Pendiente → Aprobada
-                (1, 4) => true,  // Pendiente → Cancelada
-                (2, 3) => true,  // Aprobada → Recibida
+                (1, 2) => true,
+                (1, 4) => true,
+                (2, 3) => true,
                 _ => false
             };
 

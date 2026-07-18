@@ -4,9 +4,10 @@ using DistribuidoraLaVilla.Domain.Interfaces;
 
 namespace DistribuidoraLaVilla.Application.Services
 {
-    public class PatrimonioService(IGenericRepository<PatrimonioEntity, int> patrimonioRepository)
+    public class PatrimonioService(IGenericRepository<PatrimonioEntity, int> patrimonioRepository, MovimientosFinancierosService movimientosService)
     {
         private readonly IGenericRepository<PatrimonioEntity, int> _patrimonioRepository = patrimonioRepository;
+        private readonly MovimientosFinancierosService _movimientosService = movimientosService;
 
         public async Task CrearPatrimonioAsync(PatrimonioDTO patrimonioDTO, Guid idUsuario)
         {
@@ -22,6 +23,19 @@ namespace DistribuidoraLaVilla.Application.Services
             };
 
             await _patrimonioRepository.CreateAsync(patrimonio);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Patrimonio",
+                SubTipo = "Creacion",
+                Descripcion = $"Creación de patrimonio: {patrimonio.Nombre}",
+                Monto = patrimonio.Monto,
+                Direccion = "Ingreso",
+                OrigenModulo = "Patrimonio",
+                ReferenciaId = patrimonio.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, idUsuario);
         }
 
         public async Task<List<PatrimonioEntity>> ObtenerPatrimoniosAsync()
@@ -51,6 +65,19 @@ namespace DistribuidoraLaVilla.Application.Services
             patrimonio.IdUsuario = idUsuario == Guid.Empty ? patrimonio.IdUsuario : idUsuario;
 
             await _patrimonioRepository.UpdateAsync(patrimonio);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Patrimonio",
+                SubTipo = "Ajuste",
+                Descripcion = $"Ajuste de patrimonio: {patrimonio.Nombre}",
+                Monto = patrimonio.Monto,
+                Direccion = "Neutro",
+                OrigenModulo = "Patrimonio",
+                ReferenciaId = patrimonio.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, idUsuario);
         }
 
         public async Task EliminarPatrimonioAsync(int id)
@@ -62,6 +89,19 @@ namespace DistribuidoraLaVilla.Application.Services
             }
 
             await _patrimonioRepository.DeleteAsync(id);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Patrimonio",
+                SubTipo = "Baja",
+                Descripcion = $"Baja de patrimonio: {existente.Nombre}",
+                Monto = existente.Monto,
+                Direccion = "Egreso",
+                OrigenModulo = "Patrimonio",
+                ReferenciaId = existente.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, existente.IdUsuario ?? Guid.Empty);
         }
     }
 }

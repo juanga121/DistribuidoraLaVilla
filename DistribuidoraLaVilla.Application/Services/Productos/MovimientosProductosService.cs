@@ -36,7 +36,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         /// </summary>
         public async Task<RespuestaMovimientoProductoDTO> RegistrarMovimientoAsync(CrearMovimientoProductoDTO dto)
         {
-            // 1. Validar con FluentValidation
             var validationResult = await _validator.ValidateAsync(dto);
             if (!validationResult.IsValid)
             {
@@ -44,7 +43,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 throw new ValidationException(errores);
             }
 
-            // 2. Verificar que el lote exista y esté activo
             var lote = await _lotesRepository.FindByIdAsync(dto.IdLoteProducto);
             if (lote == null)
             {
@@ -56,7 +54,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 throw new InvalidOperationException($"El lote {dto.IdLoteProducto} no está disponible (Estado: {lote.Estado})");
             }
 
-            // 3. Calcular nuevo stock según tipo de movimiento
             var stockAnterior = lote.CantidadDisponible;
             var nuevoStock = CalcularNuevoStock(
                 stockAnterior,
@@ -64,7 +61,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 (TipoMovimientoProducto)dto.TipoMovimiento
             );
 
-            // 4. Validar que el stock no sea negativo
             if (nuevoStock < 0)
             {
                 throw new InvalidOperationException(
@@ -73,10 +69,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 );
             }
 
-            // 5. Calcular total del movimiento (cantidad * precio del lote)
             var totalMovimiento = dto.Cantidad * lote.PrecioKilo;
 
-            // 6. Crear entidad de movimiento
             var movimiento = new MovimientosProductosEntity
             {
                 IdLoteProducto = dto.IdLoteProducto,
@@ -92,10 +86,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 Estado = 1
             };
 
-            // 7. Actualizar stock del lote
             lote.CantidadDisponible = nuevoStock;
 
-            // 8. Guardar en repositorio (simula transacción)
             await _movimientosRepository.CreateAsync(movimiento);
             await _lotesRepository.UpdateAsync(lote);
 
@@ -113,7 +105,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             }
             catch { /* fire-and-forget */ }
 
-            // 9. Retornar respuesta con stock anterior y nuevo
             return new RespuestaMovimientoProductoDTO
             {
                 IdMovimiento = movimiento.Id,
@@ -141,11 +132,11 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         {
             return tipo switch
             {
-                TipoMovimientoProducto.Entrada => stockActual + cantidad,      // Suma
-                TipoMovimientoProducto.Venta => stockActual - cantidad,        // Resta
-                TipoMovimientoProducto.Ajuste => cantidad,                     // Reemplaza (valor absoluto)
-                TipoMovimientoProducto.Devolucion => stockActual + cantidad,   // Suma
-                TipoMovimientoProducto.Vencimiento => stockActual - cantidad,  // Resta
+                TipoMovimientoProducto.Entrada => stockActual + cantidad,
+                TipoMovimientoProducto.Venta => stockActual - cantidad,
+                TipoMovimientoProducto.Ajuste => cantidad,
+                TipoMovimientoProducto.Devolucion => stockActual + cantidad,
+                TipoMovimientoProducto.Vencimiento => stockActual - cantidad,
                 _ => throw new InvalidOperationException($"Tipo de movimiento no válido: {tipo}")
             };
         }

@@ -1,9 +1,9 @@
 using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS.Reportes;
 using DistribuidoraLaVilla.Domain.Entities;
+using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Facturacion;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
-using DistribuidoraLaVilla.Domain.Enums;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,6 +27,9 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
         private readonly IGenericRepository<PasivosEntity, int> _pasivosRepo;
         private readonly IGenericRepository<ActivosEntity, int> _activosRepo;
         private readonly IGenericRepository<PatrimonioEntity, int> _patrimonioRepo;
+        private readonly IGenericRepository<CajaAperturaEntity, int> _cajaAperturaRepo;
+        private readonly IGenericRepository<CajaMovimientoEntity, int> _cajaMovimientoRepo;
+        private readonly ICuentasPagarService _cxpService;
 
         public ReportesService(
             IGenericRepository<FacturaEntity, int> facturaRepo,
@@ -44,7 +47,10 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             IGenericRepository<LotesMateriaPrimaEntity, int> loteMPRepo,
             IGenericRepository<PasivosEntity, int> pasivosRepo,
             IGenericRepository<ActivosEntity, int> activosRepo,
-            IGenericRepository<PatrimonioEntity, int> patrimonioRepo)
+            IGenericRepository<PatrimonioEntity, int> patrimonioRepo,
+            IGenericRepository<CajaAperturaEntity, int> cajaAperturaRepo,
+            IGenericRepository<CajaMovimientoEntity, int> cajaMovimientoRepo,
+            ICuentasPagarService cxpService)
         {
             _facturaRepo = facturaRepo;
             _detalleRepo = detalleRepo;
@@ -62,27 +68,24 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             _pasivosRepo = pasivosRepo;
             _activosRepo = activosRepo;
             _patrimonioRepo = patrimonioRepo;
+            _cajaAperturaRepo = cajaAperturaRepo;
+            _cajaMovimientoRepo = cajaMovimientoRepo;
+            _cxpService = cxpService;
         }
 
-        // ──────────────────────────────────────────────
-        // T-03: Dashboard
-        // ──────────────────────────────────────────────
 
         public async Task<DashboardDTO> GetDashboardAsync()
         {
             var now = DateTime.Now;
             var today = now.Date;
 
-            // Monday of current week (start of week)
             var diff = (7 + (today.DayOfWeek - DayOfWeek.Monday)) % 7;
             var startOfWeek = today.AddDays(-diff);
 
-            // Start of current month
             var startOfMonth = new DateTime(today.Year, today.Month, 1);
 
             var facturasQuery = _facturaRepo.GetQueryable().Where(f => f.Estado == 1);
 
-            // ── Ventas Hoy ──
             var ventasHoy = await facturasQuery
                 .Where(f => f.Fecha.HasValue && f.Fecha.Value.Date == today)
                 .GroupBy(_ => 1)
@@ -93,7 +96,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 })
                 .FirstOrDefaultAsync() ?? new VentasPeriodoDTO();
 
-            // ── Ventas Semana ──
             var ventasSemana = await facturasQuery
                 .Where(f => f.Fecha.HasValue && f.Fecha.Value.Date >= startOfWeek && f.Fecha.Value.Date < startOfWeek.AddDays(7))
                 .GroupBy(_ => 1)
@@ -104,7 +106,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 })
                 .FirstOrDefaultAsync() ?? new VentasPeriodoDTO();
 
-            // ── Ventas Mes ──
             var ventasMes = await facturasQuery
                 .Where(f => f.Fecha.HasValue && f.Fecha.Value.Year == today.Year && f.Fecha.Value.Month == today.Month)
                 .GroupBy(_ => 1)
@@ -115,7 +116,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 })
                 .FirstOrDefaultAsync() ?? new VentasPeriodoDTO();
 
-            // ── Top 10 Productos ──
             var detallesQuery = _detalleRepo.GetQueryable();
             var productosQuery = _productoRepo.GetQueryable();
 
@@ -136,7 +136,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 .Take(10)
                 .ToListAsync();
 
-            // ── CxC Resumen ──
             var cxcQuery = _cxcRepo.GetQueryable()
                 .Where(c => c.SaldoPendiente > 0 && c.Estado == 1);
 
@@ -159,7 +158,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 })
                 .FirstOrDefaultAsync() ?? new CxcResumenDTO();
 
-            // ── Stock Bajo (threshold = 10) ──
             var stockBajo = await _loteRepo.GetQueryable()
                 .Where(l => l.Estado == 1)
                 .GroupBy(l => new { l.IdProducto })
@@ -182,7 +180,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 .OrderBy(s => s.NombreProducto)
                 .ToListAsync();
 
-            // ── Últimas 10 Facturas ──
             var ultimasFacturas = await facturasQuery
                 .Where(f => f.Fecha.HasValue)
                 .OrderByDescending(f => f.Fecha)
@@ -199,7 +196,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                     })
                 .ToListAsync();
 
-            // ── Alertas ──
             var alertas = new List<string>();
 
             var proximosVencerMP = await _loteMPRepo.GetQueryable()
@@ -228,7 +224,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             if (stockBajoCount > 0)
                 alertas.Add($"{stockBajoCount} producto(s) con stock bajo");
 
-            // ── Ventas Contado / Crédito (hoy) ──
             var facturasHoy = await facturasQuery
                 .Where(f => f.Fecha.HasValue && f.Fecha.Value.Date == today)
                 .ToListAsync();
@@ -245,7 +240,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 Count = facturasHoy.Count(f => f.TipoFactura == 2)
             };
 
-            // ── Stock Bajo por Categoría ──
             var stockBajoProductIds = stockBajo.Select(s => s.IdProducto).ToList();
             var productosConCategoria = await _productoRepo.GetQueryable()
                 .Where(p => stockBajoProductIds.Contains(p.Id))
@@ -287,9 +281,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             };
         }
 
-        // ──────────────────────────────────────────────
-        // T-09: Balance mínimo
-        // ──────────────────────────────────────────────
 
         public async Task<BalanceMinimoReporteDTO> GetBalanceMinimoAsync()
         {
@@ -358,9 +349,52 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
 
             var activosDirectoTotal = activosItems.Sum(a => a.Monto);
 
+            var aperturas = await _cajaAperturaRepo.GetAllAsync();
+            var efectivoItems = new List<BalanceEfectivoItemDTO>();
+            decimal efectivoTotal = 0;
+
+            foreach (var apertura in aperturas)
+            {
+                decimal totalIngresos = apertura.TotalIngresos ?? 0;
+                decimal totalEgresos = apertura.TotalEgresos ?? 0;
+
+                if (!apertura.TotalIngresos.HasValue || !apertura.TotalEgresos.HasValue)
+                {
+                    var movimientos = _cajaMovimientoRepo.GetByFilter(m => m.IdApertura == apertura.Id);
+                    totalIngresos = movimientos.Where(m => m.TipoMovimiento == 1).Sum(m => m.Monto);
+                    totalEgresos = movimientos.Where(m => m.TipoMovimiento == 2).Sum(m => m.Monto);
+                }
+
+                decimal saldo = apertura.MontoInicial + totalIngresos - totalEgresos;
+                efectivoTotal += saldo;
+
+                efectivoItems.Add(new BalanceEfectivoItemDTO
+                {
+                    IdApertura = apertura.Id,
+                    FechaApertura = apertura.FechaApertura,
+                    MontoInicial = apertura.MontoInicial,
+                    TotalIngresos = totalIngresos,
+                    TotalEgresos = totalEgresos,
+                    Saldo = saldo
+                });
+            }
+
             var pasivosTotal = await _pasivosRepo.GetQueryable()
                 .Where(p => p.Estado == 1)
                 .SumAsync(p => p.Monto);
+
+            var cxpEntities = await _cxpService.ObtenerTodosAsync(1);
+            var cxpItems = cxpEntities.Where(c => c.SaldoPendiente > 0).ToList();
+            var cuentasPagarItems = cxpItems.Select(c => new BalanceCuentasPagarItemDTO
+            {
+                IdCuentaPagar = c.IdCuentaPagar,
+                Proveedor = c.ProveedorNombre ?? "Proveedor eliminado",
+                MontoTotal = c.MontoTotal,
+                SaldoPendiente = c.SaldoPendiente,
+                FechaVencimiento = c.FechaVencimiento
+            }).OrderByDescending(c => c.SaldoPendiente).ToList();
+            decimal cuentasPagarTotal = cxpItems.Sum(c => c.SaldoPendiente);
+            pasivosTotal += cuentasPagarTotal;
 
             var patrimoniosItems = await _patrimonioRepo.GetQueryable()
                 .Where(p => p.Estado == 1)
@@ -373,9 +407,10 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 })
                 .ToListAsync();
 
-            var patrimonioDirectoTotal = patrimoniosItems.Sum(p => p.Monto);
+            var patrimonioCapitalTotal = patrimoniosItems.Sum(p => p.Monto);
 
-            var activosTotal = cuentasPorCobrarTotal + inventarioProductosTotal + inventarioMateriaPrimaTotal + activosDirectoTotal;
+            var activosTotal = cuentasPorCobrarTotal + inventarioProductosTotal + inventarioMateriaPrimaTotal + activosDirectoTotal + efectivoTotal;
+            var patrimonioComputed = activosTotal - pasivosTotal;
 
             return new BalanceMinimoReporteDTO
             {
@@ -383,23 +418,27 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 CuentasPorCobrarTotal = cuentasPorCobrarTotal,
                 InventarioProductosTotal = inventarioProductosTotal,
                 InventarioMateriaPrimaTotal = inventarioMateriaPrimaTotal,
+                EfectivoEquivalenteTotal = efectivoTotal,
                 ActivosTotal = activosTotal,
                 PasivosTotal = pasivosTotal,
-                PatrimonioTotal = patrimonioDirectoTotal,
-                ActivosNota = "Los activos incluyen cuentas por cobrar, inventario de productos, materia prima y registros de la tabla activos.",
-                PasivosNota = "Los pasivos se calculan desde la tabla pasivos con registros activos.",
-                PatrimonioNota = "El patrimonio se calcula desde la tabla patrimonio con registros activos.",
+                CuentasPagarTotal = cuentasPagarTotal,
+                PatrimonioComputed = patrimonioComputed,
+                PatrimonioTotal = patrimonioCapitalTotal,
+                PatrimonioCapitalTotal = patrimonioCapitalTotal,
+                ActivosNota = "Los activos incluyen cuentas por cobrar, inventario de productos, materia prima, registros de la tabla activos y efectivo (caja).",
+                PasivosNota = "Los pasivos incluyen registros de la tabla pasivos y cuentas por pagar pendientes.",
+                PatrimonioNota = "El patrimonio se calcula como Activos - Pasivos. Los aportes de capital son registros manuales de la tabla patrimonio.",
                 CuentasPorCobrar = cxcItems,
                 ProductosTerminados = productosTerminados,
                 MateriaPrima = materiaPrima,
                 Activos = activosItems,
-                Patrimonios = patrimoniosItems
+                EfectivoItems = efectivoItems,
+                CuentasPagarItems = cuentasPagarItems,
+                Patrimonios = patrimoniosItems,
+                PatrimonioCapitalItems = patrimoniosItems
             };
         }
 
-        // ──────────────────────────────────────────────
-        // T-06: Ventas
-        // ──────────────────────────────────────────────
 
         public async Task<VentasReporteDTO> GetVentasAsync(DateTime desde, DateTime hasta,
             Guid? idCliente, int? idProducto)
@@ -410,13 +449,11 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             var facturasQuery = _facturaRepo.GetQueryable()
                 .Where(f => f.Estado == 1 && f.Fecha.HasValue && f.Fecha.Value >= desdeDate && f.Fecha.Value <= hastaDate);
 
-            // Optional: filter by client
             if (idCliente.HasValue)
             {
                 facturasQuery = facturasQuery.Where(f => f.IdCliente == idCliente.Value);
             }
 
-            // Optional: filter by product (via DetalleFactura)
             if (idProducto.HasValue)
             {
                 var facturaIdsConProducto = _detalleRepo.GetQueryable()
@@ -458,9 +495,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             };
         }
 
-        // ──────────────────────────────────────────────
-        // T-04: CxC Aging
-        // ──────────────────────────────────────────────
 
         public async Task<CxcAgingReporteDTO> GetCxcAgingAsync(Guid? idCliente)
         {
@@ -491,7 +525,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                     })
                 .ToListAsync();
 
-            // Group into buckets in memory (days past due needs C# computation)
             var buckets = new List<CxcBucketDTO>
             {
                 new CxcBucketDTO { Key = "corriente", Nombre = "Corriente (≤30 días)" },
@@ -528,7 +561,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 });
             }
 
-            // Remove empty buckets
             buckets = buckets.Where(b => b.Count > 0).ToList();
 
             return new CxcAgingReporteDTO
@@ -538,9 +570,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             };
         }
 
-        // ──────────────────────────────────────────────
-        // T-05: Inventario
-        // ──────────────────────────────────────────────
 
         public async Task<InventarioReporteDTO> GetInventarioAsync(int? idCategoria, int stockThreshold = 10)
         {
@@ -554,7 +583,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
 
             var categoriasQuery = _categoriaRepo.GetQueryable();
 
-            // Stock actual por producto (suma de CantidadDisponible de lotes activos)
             var stockPorProducto = await _loteRepo.GetQueryable()
                 .Where(l => l.Estado == 1)
                 .GroupBy(l => l.IdProducto)
@@ -567,7 +595,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
 
             var stockDict = stockPorProducto.ToDictionary(s => s.IdProducto, s => s.StockActual);
 
-            // Productos con stock
             var productos = await productosQuery
                 .Join(categoriasQuery,
                     p => p.IdCategoria,
@@ -578,7 +605,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                         NombreProducto = p.Nombre ?? string.Empty,
                         IdCategoria = p.IdCategoria,
                         Categoria = c.Nombre ?? string.Empty,
-                        StockActual = 0, // will fill below
+                        StockActual = 0,
                         StockBajo = false
                     })
                 .OrderBy(p => p.NombreProducto)
@@ -590,7 +617,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 prod.StockBajo = prod.StockActual < stockThreshold;
             }
 
-            // Lotes próximos a vencer (within next 30 days, not yet expired)
             var lotesProximos = await _loteRepo.GetQueryable()
                 .Where(l => l.Estado == 1
                     && l.FechaVencimiento > now
@@ -615,9 +641,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             };
         }
 
-        // ──────────────────────────────────────────────
-        // T-07: Cliente
-        // ──────────────────────────────────────────────
 
         public async Task<ClienteReporteDTO?> GetClienteAsync(Guid idCliente)
         {
@@ -660,9 +683,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             };
         }
 
-        // ──────────────────────────────────────────────
-        // T-08: Movimientos
-        // ──────────────────────────────────────────────
 
         public async Task<MovimientosReporteDTO> GetMovimientosAsync(DateTime desde, DateTime hasta,
             int? idProducto, int? tipoMovimiento)
@@ -678,7 +698,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 movimientosQuery = movimientosQuery.Where(m => m.TipoMovimiento == tipoMovimiento.Value);
             }
 
-            // If filtering by product, go through LotesProductos to find matching lote IDs
             if (idProducto.HasValue)
             {
                 var loteIds = _loteRepo.GetQueryable()
@@ -688,7 +707,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 movimientosQuery = movimientosQuery.Where(m => loteIds.Contains(m.IdLoteProducto));
             }
 
-            // Load raw movement data sorted desc
             var rawMovimientos = await movimientosQuery
                 .OrderByDescending(m => m.FechaMovimiento)
                 .Select(m => new
@@ -702,7 +720,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 })
                 .ToListAsync();
 
-            // Collect distinct lote IDs and load related data
             var loteIdsList = rawMovimientos
                 .Where(m => m.IdLoteProducto.HasValue)
                 .Select(m => m.IdLoteProducto!.Value)
@@ -760,16 +777,12 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             };
         }
 
-        // ──────────────────────────────────────────────
-        // Movimientos del Día
-        // ──────────────────────────────────────────────
 
         public async Task<MovimientosDiariosDTO> GetMovimientosDiariosAsync()
         {
             var todayStart = DateTime.Now.Date;
             var todayEnd = todayStart.AddDays(1);
 
-            // ── Facturación del día ──
             var facturasHoy = await _facturaRepo.GetQueryable()
                 .Where(f => f.Fecha.HasValue && f.Fecha.Value >= todayStart && f.Fecha.Value < todayEnd && f.Estado == 1)
                 .ToListAsync();
@@ -777,21 +790,18 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             var contado = facturasHoy.Count(f => f.TipoFactura == 1);
             var credito = facturasHoy.Count(f => f.TipoFactura == 2);
 
-            // ── Movimientos MP del día ──
             var movMP = await _movMPRepo.GetQueryable()
                 .Where(m => m.Fecha >= todayStart && m.Fecha < todayEnd)
                 .GroupBy(m => m.IdTipoMovimiento)
                 .Select(g => new { Tipo = g.Key, Count = g.Count() })
                 .ToListAsync();
 
-            // ── Movimientos Productos del día ──
             var movProd = await _movProdRepo.GetQueryable()
                 .Where(m => m.FechaMovimiento >= todayStart && m.FechaMovimiento < todayEnd)
                 .GroupBy(m => m.TipoMovimiento)
                 .Select(g => new { Tipo = g.Key, Count = g.Count() })
                 .ToListAsync();
 
-            // ── CxC ──
             var cxcPendientes = await _cxcRepo.GetQueryable()
                 .Where(c => c.Estado == 1 && c.SaldoPendiente.HasValue && c.SaldoPendiente > 0)
                 .ToListAsync();
@@ -800,7 +810,6 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 .Where(c => c.FechaVencimiento.HasValue && c.FechaVencimiento.Value < todayStart)
                 .ToList();
 
-            // ── Alertas ──
             var alertas = new List<string>();
 
             var proximosVencer = await _loteMPRepo.GetQueryable()

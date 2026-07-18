@@ -1,5 +1,7 @@
 using System.Text.Json;
 using DistribuidoraLaVilla.Application.Interfaces;
+using DistribuidoraLaVilla.Application.Services;
+using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.DTOS.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Facturacion;
@@ -20,6 +22,7 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
         private readonly IGenericRepository<ReciboEntity, int> _reciboRepo;
         private readonly IAuditoriaService _auditoriaService;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly MovimientosFinancierosService _movimientosService;
 
         public CajaService(
             IGenericRepository<CajaAperturaEntity, int> aperturaRepo,
@@ -29,7 +32,8 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             IGenericRepository<PagoCuentaEntity, int> pagoRepo,
             IGenericRepository<ReciboEntity, int> reciboRepo,
             IAuditoriaService auditoriaService,
-            IUnitOfWork unitOfWork)
+            IUnitOfWork unitOfWork,
+            MovimientosFinancierosService movimientosService)
         {
             _aperturaRepo = aperturaRepo;
             _movimientoRepo = movimientoRepo;
@@ -39,6 +43,7 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             _reciboRepo = reciboRepo;
             _auditoriaService = auditoriaService;
             _unitOfWork = unitOfWork;
+            _movimientosService = movimientosService;
         }
 
         public async Task<CajaAperturaDTO?> ObtenerCajaActivaAsync()
@@ -72,6 +77,19 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
 
                 await _aperturaRepo.CreateAsync(entity);
                 await _unitOfWork.CommitAsync();
+
+                await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+                {
+                    TipoMovimiento = "Caja",
+                    SubTipo = "Apertura",
+                    Descripcion = "Apertura de caja",
+                    Monto = entity.MontoInicial,
+                    Direccion = "Ingreso",
+                    OrigenModulo = "Caja",
+                    ReferenciaId = entity.Id,
+                    FechaMovimiento = DateTime.Now,
+                    Estado = 1
+                }, dto.IdUsuario);
 
                 await RegistrarAuditoriaAsync("Caja", entity.Id.ToString(), "AbrirCaja", new
                 {
@@ -108,6 +126,19 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
 
                 await _aperturaRepo.UpdateAsync(caja);
                 await _unitOfWork.CommitAsync();
+
+                await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+                {
+                    TipoMovimiento = "Caja",
+                    SubTipo = "Cierre",
+                    Descripcion = "Cierre de caja",
+                    Monto = caja.Diferencia ?? 0,
+                    Direccion = "Neutro",
+                    OrigenModulo = "Caja",
+                    ReferenciaId = caja.Id,
+                    FechaMovimiento = DateTime.Now,
+                    Estado = 1
+                }, dto.IdUsuario);
 
                 await RegistrarAuditoriaAsync("Caja", caja.Id.ToString(), "CerrarCaja", new
                 {
@@ -166,11 +197,25 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
                     Concepto = dto.Concepto.Trim(),
                     Monto = dto.Monto,
                     Fecha = DateTime.Now,
-                    IdUsuario = dto.IdUsuario
+                    IdUsuario = dto.IdUsuario,
+                    MetodoPago = dto.MetodoPago
                 };
 
                 await _movimientoRepo.CreateAsync(movimiento);
                 await _unitOfWork.CommitAsync();
+
+                await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+                {
+                    TipoMovimiento = "Caja",
+                    SubTipo = "Egreso",
+                    Descripcion = $"Egreso de caja: {movimiento.Concepto}",
+                    Monto = movimiento.Monto,
+                    Direccion = "Egreso",
+                    OrigenModulo = "Caja",
+                    ReferenciaId = movimiento.Id,
+                    FechaMovimiento = DateTime.Now,
+                    Estado = 1
+                }, dto.IdUsuario);
 
                 await RegistrarAuditoriaAsync("Caja", movimiento.Id.ToString(), "RegistrarEgreso", new
                 {
@@ -360,7 +405,6 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             var usuarioNombre = await GetUsuarioNombreAsync(entity.IdUsuario);
             var saldoActual = entity.MontoInicial + resumen.Ingresos - resumen.Egresos;
 
-            // Obtener movimientos para el desglose por método de pago
             var movimientos = await _movimientoRepo.GetQueryable()
                 .Where(m => m.IdApertura == entity.Id)
                 .ToListAsync();
