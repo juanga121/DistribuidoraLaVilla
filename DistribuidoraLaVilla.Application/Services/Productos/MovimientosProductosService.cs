@@ -15,18 +15,24 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 {
     public class MovimientosProductosService
     {
+        /// <summary>Canonical unit-of-measure ids shared across the inventory flows.</summary>
+        private const int IdUnidadMedidaKilo = 1;
+
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosRepository;
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesRepository;
+        private readonly IGenericRepository<ProductosEntity, int> _productosRepository;
         private readonly CrearMovimientoProductoDTOValidator _validator;
         private readonly IAuditoriaService _auditoriaService;
 
         public MovimientosProductosService(
             IGenericRepository<MovimientosProductosEntity, int> movimientosRepository,
             IGenericRepository<LotesProductosEntity, int> lotesRepository,
+            IGenericRepository<ProductosEntity, int> productosRepository,
             IAuditoriaService auditoriaService)
         {
             _movimientosRepository = movimientosRepository;
             _lotesRepository = lotesRepository;
+            _productosRepository = productosRepository;
             _auditoriaService = auditoriaService;
             _validator = new CrearMovimientoProductoDTOValidator();
         }
@@ -54,22 +60,66 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 throw new InvalidOperationException($"El lote {dto.IdLoteProducto} no está disponible (Estado: {lote.Estado})");
             }
 
+            // A product with a weight per unit is consumed in dual mode: InventarioService
+            // converts between units and weight on every sale, so the lot must always satisfy
+            // PesoDisponible == CantidadDisponible * PesoPorUnidad. Moving only one counter
+            // desyncs the lot and can strand stock, because lot selection filters on
+            // CantidadDisponible > 0.
+            var producto = await _productosRepository.FindByIdAsync(lote.IdProducto)
+                ?? throw new InvalidOperationException(
+                    $"No se encontró el producto con ID {lote.IdProducto} asociado al lote {lote.Id}");
+
+            var pesoPorUnidad = producto.PesoPorUnidad;
+            var tieneConversionPorPeso = pesoPorUnidad.HasValue && pesoPorUnidad.Value > 0;
+            var pesoPorUnidadLote = tieneConversionPorPeso && lote.CantidadDisponible > 0
+                ? lote.PesoDisponible / lote.CantidadDisponible
+                : 0m;
+
+            // The movement is expressed either in kilos or in units. Both counters are derived
+            // from that single quantity so the invariant survives the movement.
+            var movimientoEnPeso = tieneConversionPorPeso && dto.IdUnidadMedida == IdUnidadMedidaKilo;
+
+            if (!tieneConversionPorPeso && dto.IdUnidadMedida == IdUnidadMedidaKilo)
+            {
+                throw new InvalidOperationException(
+                    $"El producto '{producto.Nombre}' no tiene peso por unidad definido, " +
+                    "por lo que no admite movimientos expresados en kilos");
+            }
+
+            if (tieneConversionPorPeso && pesoPorUnidadLote <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"El lote {lote.Id} del producto '{producto.Nombre}' tiene una relación peso/unidad inválida");
+            }
+
+            var cantidadEnUnidades = movimientoEnPeso
+                ? dto.Cantidad / pesoPorUnidadLote
+                : dto.Cantidad;
+
             var stockAnterior = lote.CantidadDisponible;
             var nuevoStock = CalcularNuevoStock(
                 stockAnterior,
-                dto.Cantidad,
+                cantidadEnUnidades,
                 (TipoMovimientoProducto)dto.TipoMovimiento
             );
 
             if (nuevoStock < 0)
             {
                 throw new InvalidOperationException(
-                    $"Stock insuficiente. Disponible: {stockAnterior}, Requerido: {dto.Cantidad}. " +
+                    $"Stock insuficiente. Disponible: {stockAnterior}, Requerido: {cantidadEnUnidades}. " +
                     $"Faltante: {Math.Abs(nuevoStock)}"
                 );
             }
 
-            var totalMovimiento = dto.Cantidad * lote.PrecioKilo;
+            // Weight mirrors units through the same ratio, so both counters stay consistent.
+            var nuevoPeso = tieneConversionPorPeso
+                ? nuevoStock * pesoPorUnidadLote
+                : nuevoStock;
+
+            // Value the movement with the cost matching the unit it was expressed in,
+            // instead of always charging PrecioKilo.
+            var costoUnitario = movimientoEnPeso ? lote.PrecioKilo : lote.PrecioUnitario;
+            var totalMovimiento = dto.Cantidad * costoUnitario;
 
             var movimiento = new MovimientosProductosEntity
             {
@@ -87,6 +137,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             };
 
             lote.CantidadDisponible = nuevoStock;
+            lote.PesoDisponible = nuevoPeso;
 
             await _movimientosRepository.CreateAsync(movimiento);
             await _lotesRepository.UpdateAsync(lote);

@@ -96,7 +96,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                     PesoTotal = 3m,
                     IdUnidadMedida = 1,
                     PrecioUnitario = 50m,
-                    PrecioKilo = 50m
+                    PrecioKilo = 60m
                 }
             }
         };
@@ -115,7 +115,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                 });
 
             _productoRepo.Setup(r => r.FindByIdAsync(1)).ReturnsAsync(new ProductosEntity { Id = 1, Nombre = "Producto A", VentaPorPeso = false, Estado = 1 });
-            _productoRepo.Setup(r => r.FindByIdAsync(2)).ReturnsAsync(new ProductosEntity { Id = 2, Nombre = "Producto B", VentaPorPeso = true, PesoPorUnidad = 0.5m, Estado = 1 });
+            _productoRepo.Setup(r => r.FindByIdAsync(2)).ReturnsAsync(new ProductosEntity { Id = 2, Nombre = "Producto B", VentaPorPeso = true, PesoPorUnidad = 0.5m, PrecioPorKilo = 60m, Estado = 1 });
 
             _ordenRepo.Setup(r => r.FindByIdAsync(10)).ReturnsAsync(CreateOrden());
 
@@ -163,7 +163,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
 
             cxpCapturada.Should().NotBeNull();
             cxpCapturada!.IdOrdenCompra.Should().Be(10);
-            cxpCapturada.MontoTotal.Should().Be(1000m);
+            cxpCapturada.MontoTotal.Should().Be(400m);
 
             lotesCapturados.Should().HaveCount(2);
             lotesCapturados[0].IdUnidadMedida.Should().Be(2);
@@ -173,6 +173,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             movimientosCapturados.Should().HaveCount(2);
             ordenCapturada.Should().NotBeNull();
             ordenCapturada!.Estado.Should().Be((int)EstadoCompraEnum.Recibida);
+            ordenCapturada.Total.Should().Be(400m);
             ordenCapturada.FechaRecepcion.Should().BeCloseTo(dto.FechaRecepcion, TimeSpan.FromSeconds(1));
 
             _uow.Verify(u => u.BeginTransactionAsync(default), Times.Once);
@@ -190,6 +191,19 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
 
             await act.Should().ThrowAsync<InvalidOperationException>()
                 .WithMessage("*aprobadas*");
+        }
+
+        [Fact]
+        public async Task RegistrarRecepcionCompraAsync_CuandoNoHayDetallesExplicitos_DeberiaFallar()
+        {
+            SetupCommon();
+            var dto = CreateDto();
+            dto.Detalles.Clear();
+
+            var act = async () => await _service.RegistrarRecepcionCompraAsync(10, dto, UsuarioId);
+
+            await act.Should().ThrowAsync<FluentValidation.ValidationException>()
+                .WithMessage("*detalle de recepción*");
         }
 
         [Fact]

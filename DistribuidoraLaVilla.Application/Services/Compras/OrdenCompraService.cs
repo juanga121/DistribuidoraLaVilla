@@ -232,18 +232,13 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                     throw new InvalidOperationException("La orden de compra no tiene detalles para recepcionar");
                 }
 
-                var lineasRecepcion = dto.Detalles.Count > 0
-                    ? dto.Detalles
-                    : detallesOrden.Select(d => new RegistrarRecepcionCompraDetalleDTO
-                    {
-                        IdProducto = d.IdProducto,
-                        FechaVencimientoLote = dto.FechaVencimientoLotes,
-                        CantidadUnidades = d.Cantidad,
-                        PesoTotal = d.Cantidad,
-                        IdUnidadMedida = 2,
-                        PrecioUnitario = d.PrecioUnitario,
-                        PrecioKilo = d.PrecioUnitario
-                    }).ToList();
+                if (dto.Detalles.Count == 0)
+                {
+                    throw new InvalidOperationException("La recepción debe incluir detalles explícitos por producto");
+                }
+
+                var lineasRecepcion = dto.Detalles;
+                decimal totalRecepcion = 0m;
 
                 foreach (var detalle in lineasRecepcion)
                 {
@@ -251,14 +246,15 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                         ?? throw new KeyNotFoundException($"No se encontró el producto con ID {detalle.IdProducto}");
 
                     await CrearLoteYMovimientoAsync(orden, detalle, producto, recepcion, idUsuario);
+                    totalRecepcion += detalle.CantidadUnidades * detalle.PrecioUnitario;
                 }
 
                 var cuentaPagar = new CuentasPagarEntity
                 {
                     IdProveedor = orden.IdProveedor,
                     IdOrdenCompra = orden.Id,
-                    MontoTotal = orden.Total,
-                    SaldoPendiente = orden.Total,
+                    MontoTotal = totalRecepcion,
+                    SaldoPendiente = totalRecepcion,
                     Descripcion = $"Factura proveedor {recepcion.NumeroFacturaProveedor} - OC #{orden.Id}",
                     FechaVencimiento = dto.FechaVencimiento,
                     Estado = 1,
@@ -271,6 +267,8 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
 
                 orden.Estado = (int)EstadoCompraEnum.Recibida;
                 orden.FechaRecepcion = dto.FechaRecepcion;
+                orden.Subtotal = totalRecepcion;
+                orden.Total = totalRecepcion;
                 orden.FechaActualizacion = DateTime.Now;
 
                 await _ordenCompraRepository.UpdateAsync(orden);
@@ -322,7 +320,31 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
         {
             var ventaPorPeso = producto.VentaPorPeso;
             var pesoPorUnidad = producto.PesoPorUnidad;
-            var idUnidadMedida = detalle.IdUnidadMedida > 0 ? detalle.IdUnidadMedida : (ventaPorPeso ? 1 : 2);
+            if (ventaPorPeso && (!pesoPorUnidad.HasValue || pesoPorUnidad <= 0))
+            {
+                throw new InvalidOperationException(
+                    $"El producto '{producto.Nombre}' está habilitado para venta por peso pero no tiene peso por unidad definido");
+            }
+
+            var idUnidadMedida = ventaPorPeso ? 1 : 2;
+            if (detalle.IdUnidadMedida > 0 && detalle.IdUnidadMedida != idUnidadMedida)
+            {
+                throw new InvalidOperationException(
+                    $"La unidad de medida del detalle no coincide con el modo del producto '{producto.Nombre}'");
+            }
+
+            if (detalle.PrecioUnitario <= 0 || detalle.PrecioKilo <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"La recepción del producto '{producto.Nombre}' debe incluir ambos costos positivos");
+            }
+
+            // Reception is a data capture step: the operator reports the weight that physically
+            // arrived, so the lot is persisted with that submitted weight instead of one
+            // recomputed from the product's PesoPorUnidad. As a result the lot carries its own
+            // weight ratio (PesoTotal / CantidadUnidades), which can legitimately differ from
+            // the product's nominal ratio. Consumption conversion in InventarioService still
+            // uses the product ratio and will be revisited to consume this per-lot truth.
             var cantidadDisponible = detalle.CantidadUnidades;
             var pesoDisponible = detalle.PesoTotal;
             var cantidadUnidades = Math.Max(1, (int)Math.Round(detalle.CantidadUnidades, MidpointRounding.AwayFromZero));

@@ -130,6 +130,57 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
         }
 
         [Fact]
+        public async Task ActualizarLoteProducto_DebeAjustarDisponiblesPorDiferenciaRealDelLote()
+        {
+            var lote = new LotesProductosEntity
+            {
+                Id = 15,
+                IdProducto = 1,
+                IdProveedor = Guid.NewGuid(),
+                FechaEntrada = new DateTime(2026, 1, 10),
+                FechaVencimiento = new DateTime(2026, 2, 10),
+                CantidadUnidades = 1000,
+                PesoTotal = 10000m,
+                IdUnidadMedida = 1,
+                PrecioUnitario = 12m,
+                PrecioKilo = 12m,
+                PrecioTotal = 12000m,
+                IdMarca = 1,
+                CantidadInicial = 1000m,
+                CantidadDisponible = 800m,
+                PesoDisponible = 8000m,
+                Estado = 1
+            };
+
+            LotesProductosEntity? capturado = null;
+
+            _lotesRepo.Setup(r => r.FindByIdAsync(15)).ReturnsAsync(lote);
+            _lotesRepo.Setup(r => r.UpdateAsync(It.IsAny<LotesProductosEntity>()))
+                .Callback<LotesProductosEntity>(e => capturado = e)
+                .Returns(Task.CompletedTask);
+
+            var dto = new LotesProductosDTO
+            {
+                IdProducto = 1,
+                IdProveedor = lote.IdProveedor,
+                FechaVencimiento = new DateTime(2026, 3, 10),
+                CantidadUnidades = 1200,
+                PesoTotal = 12000m,
+                IdUnidadMedida = 1,
+                PrecioUnitario = 15m,
+                PrecioKilo = 15m,
+                IdMarca = 1,
+                IdUsuario = Guid.NewGuid()
+            };
+
+            await _service.ActualizarLoteProducto(15, dto);
+
+            capturado.Should().NotBeNull();
+            capturado!.CantidadDisponible.Should().Be(1000m);
+            capturado.PesoDisponible.Should().Be(10000m);
+        }
+
+        [Fact]
         public async Task LotesProductosDTOValidator_CreateMode_RechazaVencimientoDeHoy()
         {
             var validator = new LotesProductosDTOValidator();

@@ -180,10 +180,17 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             var lote = await _lotesProductosRepository.FindByIdAsync(id);
             if (lote != null)
             {
+                var diferenciaCantidad = lotesProductosDTO.CantidadUnidades - lote.CantidadUnidades;
                 var diferenciaPeso = lotesProductosDTO.PesoTotal - lote.PesoTotal;
 
-                var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto);
-                var pesoPorUnidad = producto?.PesoPorUnidad;
+                var cantidadConsumida = lote.CantidadUnidades - lote.CantidadDisponible;
+                var pesoConsumido = lote.PesoTotal - lote.PesoDisponible;
+
+                if (lotesProductosDTO.CantidadUnidades < cantidadConsumida || lotesProductosDTO.PesoTotal < pesoConsumido)
+                {
+                    throw new InvalidOperationException(
+                        "No se puede reducir el lote por debajo de lo ya consumido");
+                }
 
                 lote.IdProducto = lotesProductosDTO.IdProducto;
                 lote.IdProveedor = lotesProductosDTO.IdProveedor;
@@ -196,16 +203,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 lote.PrecioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
                 lote.IdMarca = lotesProductosDTO.IdMarca;
 
-                if (pesoPorUnidad.HasValue)
-                {
-                    lote.CantidadDisponible += diferenciaPeso / pesoPorUnidad.Value;
-                    lote.PesoDisponible += diferenciaPeso;
-                }
-                else
-                {
-                    lote.CantidadDisponible += diferenciaPeso;
-                    lote.PesoDisponible += diferenciaPeso;
-                }
+                lote.CantidadDisponible += diferenciaCantidad;
+                lote.PesoDisponible += diferenciaPeso;
 
                 await _lotesProductosRepository.UpdateAsync(lote);
 
@@ -214,6 +213,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     var detalle = JsonSerializer.Serialize(new
                     {
                         cantidadUnidades = lotesProductosDTO.CantidadUnidades,
+                        diferenciaCantidad,
                         pesoTotal = lotesProductosDTO.PesoTotal,
                         diferenciaPeso
                     });

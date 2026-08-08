@@ -205,11 +205,20 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                 decimal cantidadAConsumir;
                 decimal unidadesAConsumir = 0;
                 decimal pesoAConsumir = 0;
+                decimal pesoPorUnidadLote = lote.CantidadDisponible > 0
+                    ? lote.PesoDisponible / lote.CantidadDisponible
+                    : 0m;
+
+                if (pesoPorUnidad.HasValue && pesoPorUnidadLote <= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"El lote {lote.Id} del producto '{producto.Nombre}' tiene una relación peso/unidad inválida");
+                }
 
                 if (pesoPorUnidad.HasValue && esVentaPorPeso)
                 {
                     cantidadAConsumir = Math.Min(lote.PesoDisponible, cantidadPendiente);
-                    unidadesAConsumir = cantidadAConsumir / pesoPorUnidad.Value;
+                    unidadesAConsumir = cantidadAConsumir / pesoPorUnidadLote;
                     pesoAConsumir = cantidadAConsumir;
 
                     lote.PesoDisponible -= pesoAConsumir;
@@ -219,7 +228,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                 {
                     cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
                     unidadesAConsumir = cantidadAConsumir;
-                    pesoAConsumir = cantidadAConsumir * pesoPorUnidad.Value;
+                    pesoAConsumir = cantidadAConsumir * pesoPorUnidadLote;
 
                     lote.CantidadDisponible -= unidadesAConsumir;
                     lote.PesoDisponible -= pesoAConsumir;

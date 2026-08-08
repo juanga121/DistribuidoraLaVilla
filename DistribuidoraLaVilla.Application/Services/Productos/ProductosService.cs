@@ -20,8 +20,10 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
         public async Task CrearProductoAsync(ProductoDTO productoDTO, Guid idUsuario)
         {
-            if (productoDTO.VentaPorPeso && (productoDTO.PrecioPorKilo == null || productoDTO.PrecioPorKilo <= 0))
-                throw new ArgumentException("El precio por kilo es obligatorio y debe ser mayor a 0 cuando el producto se vende por peso");
+            ValidarDatosProducto(productoDTO);
+
+            var precioPorKilo = productoDTO.VentaPorPeso ? productoDTO.PrecioPorKilo : null;
+            var pesoPorUnidad = productoDTO.VentaPorPeso ? productoDTO.PesoPorUnidad : null;
 
             ProductosEntity productoEntity = new()
             {
@@ -30,8 +32,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 IdCategoria = productoDTO.IdCategoria,
                 PrecioUnitario = productoDTO.PrecioUnitario,
                 VentaPorPeso = productoDTO.VentaPorPeso,
-                PrecioPorKilo = productoDTO.PrecioPorKilo,
-                PesoPorUnidad = productoDTO.PesoPorUnidad,
+                PrecioPorKilo = precioPorKilo,
+                PesoPorUnidad = pesoPorUnidad,
                 Estado = 1
             };
             await _productos.CreateAsync(productoEntity);
@@ -88,8 +90,10 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
         public async Task ActualizarProducto(int idProducto, ProductoDTO productoDTO, Guid idUsuario)
         {
-            if (productoDTO.VentaPorPeso && (productoDTO.PrecioPorKilo == null || productoDTO.PrecioPorKilo <= 0))
-                throw new ArgumentException("El precio por kilo es obligatorio y debe ser mayor a 0 cuando el producto se vende por peso");
+            ValidarDatosProducto(productoDTO);
+
+            var precioPorKilo = productoDTO.VentaPorPeso ? productoDTO.PrecioPorKilo : null;
+            var pesoPorUnidad = productoDTO.VentaPorPeso ? productoDTO.PesoPorUnidad : null;
 
             var producto = await _productos.FindByIdAsync(idProducto);
             if (producto != null)
@@ -102,8 +106,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 producto.IdCategoria = productoDTO.IdCategoria;
                 producto.PrecioUnitario = productoDTO.PrecioUnitario;
                 producto.VentaPorPeso = productoDTO.VentaPorPeso;
-                producto.PrecioPorKilo = productoDTO.PrecioPorKilo;
-                producto.PesoPorUnidad = productoDTO.PesoPorUnidad;
+                producto.PrecioPorKilo = precioPorKilo;
+                producto.PesoPorUnidad = pesoPorUnidad;
                 await _productos.UpdateAsync(producto);
 
                 try
@@ -136,6 +140,24 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
             {
                 throw new Exception("Error al actualizar el producto");
             }
+        }
+
+        private static void ValidarDatosProducto(ProductoDTO productoDTO)
+        {
+            if (productoDTO.PrecioUnitario <= 0)
+                throw new ArgumentException("El precio por unidad es obligatorio y debe ser mayor a 0");
+
+            if (!productoDTO.VentaPorPeso)
+                return;
+
+            if (productoDTO.PrecioPorKilo == null || productoDTO.PrecioPorKilo <= 0)
+                throw new ArgumentException("El precio por kilo es obligatorio y debe ser mayor a 0 cuando el producto se vende por peso");
+
+            if (productoDTO.PesoPorUnidad == null || productoDTO.PesoPorUnidad <= 0)
+                throw new ArgumentException("El peso por unidad es obligatorio y debe ser mayor a 0 cuando el producto se vende por peso");
+
+            if (productoDTO.PrecioUnitario == productoDTO.PrecioPorKilo)
+                throw new ArgumentException("El precio por unidad y el precio por kilo deben ser distintos");
         }
 
         public async Task<List<ProductosEntity>> ObtenerProductosDisponibles()
