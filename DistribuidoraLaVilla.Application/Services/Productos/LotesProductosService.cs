@@ -73,7 +73,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 PrecioKilo = lotesProductosDTO.PrecioKilo,
                 PrecioTotal = precioTotal,
                 IdMarca = lotesProductosDTO.IdMarca,
-                CantidadInicial = lotesProductosDTO.PesoTotal,
+                CantidadInicial = cantidadDisponible,
                 CantidadDisponible = cantidadDisponible,
                 PesoDisponible = pesoDisponible,
                 Estado = 1
@@ -169,7 +169,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
         public async Task ActualizarLoteProducto(int id, LotesProductosDTO lotesProductosDTO)
         {
-            var validator = new LotesProductosDTOValidator();
+            var validator = new LotesProductosDTOValidator(validarFechaVencimientoFutura: false);
             var validationResult = await validator.ValidateAsync(lotesProductosDTO);
 
             if (!validationResult.IsValid)
@@ -187,7 +187,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 lote.IdProducto = lotesProductosDTO.IdProducto;
                 lote.IdProveedor = lotesProductosDTO.IdProveedor;
-                lote.FechaEntrada = DateTime.Now;
                 lote.FechaVencimiento = lotesProductosDTO.FechaVencimiento;
                 lote.CantidadUnidades = lotesProductosDTO.CantidadUnidades;
                 lote.PesoTotal = lotesProductosDTO.PesoTotal;
@@ -196,7 +195,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 lote.PrecioKilo = lotesProductosDTO.PrecioKilo;
                 lote.PrecioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
                 lote.IdMarca = lotesProductosDTO.IdMarca;
-                lote.CantidadInicial = lotesProductosDTO.PesoTotal;
 
                 if (pesoPorUnidad.HasValue)
                 {

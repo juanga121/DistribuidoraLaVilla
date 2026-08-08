@@ -5,7 +5,7 @@ namespace DistribuidoraLaVilla.Application.Validators
 {
     public class LotesProductosDTOValidator : AbstractValidator<LotesProductosDTO>
     {
-        public LotesProductosDTOValidator()
+        public LotesProductosDTOValidator(bool validarFechaVencimientoFutura = true)
         {
             RuleFor(x => x.CantidadUnidades)
                 .GreaterThan(0)
@@ -17,11 +17,11 @@ namespace DistribuidoraLaVilla.Application.Validators
 
             RuleFor(x => x.PrecioUnitario)
                 .GreaterThan(0)
-                .WithMessage("El precio unitario debe ser mayor a 0");
+                .WithMessage("El costo unitario debe ser mayor a 0");
 
             RuleFor(x => x.PrecioKilo)
                 .GreaterThan(0)
-                .WithMessage("El precio por kilo debe ser mayor a 0");
+                .WithMessage("El costo por kilo debe ser mayor a 0");
 
             RuleFor(x => x.IdProducto)
                 .GreaterThan(0)
@@ -35,9 +35,12 @@ namespace DistribuidoraLaVilla.Application.Validators
                 .NotEmpty()
                 .WithMessage("Debe especificar un proveedor válido");
 
-            RuleFor(x => x.FechaVencimiento)
-                .GreaterThan(DateTime.Now)
-                .WithMessage("La fecha de vencimiento debe ser posterior a la fecha actual");
+            if (validarFechaVencimientoFutura)
+            {
+                RuleFor(x => x.FechaVencimiento)
+                    .GreaterThan(DateTime.Today)
+                    .WithMessage("La fecha de vencimiento debe ser posterior a la fecha actual");
+            }
 
             RuleFor(x => x.IdUnidadMedida)
                 .GreaterThan(0)

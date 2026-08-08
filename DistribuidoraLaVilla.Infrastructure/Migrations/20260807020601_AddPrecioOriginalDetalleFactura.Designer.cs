@@ -4,6 +4,7 @@ using DistribuidoraLaVilla.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DistribuidoraLaVilla.Infrastructure.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20260807020601_AddPrecioOriginalDetalleFactura")]
+    partial class AddPrecioOriginalDetalleFactura
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -452,83 +455,6 @@ namespace DistribuidoraLaVilla.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("ordenes_compra");
-                });
-
-            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Compras.RecepcionCompraEntity", b =>
-                {
-                    b.Property<int>("IdRecepcionCompra")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id_recepcion_compra");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdRecepcionCompra"));
-
-                    b.Property<int>("Estado")
-                        .HasColumnType("int")
-                        .HasColumnName("estado");
-
-                    b.Property<DateTime?>("FechaActualizacion")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_actualizacion");
-
-                    b.Property<DateTime>("FechaCreacion")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_creacion");
-
-                    b.Property<DateTime>("FechaFactura")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_factura");
-
-                    b.Property<DateTime>("FechaRecepcion")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_recepcion");
-
-                    b.Property<DateTime>("FechaVencimiento")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_vencimiento");
-
-                    b.Property<DateTime>("FechaVencimientoLotes")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_vencimiento_lotes");
-
-                    b.Property<int>("IdMarca")
-                        .HasColumnType("int")
-                        .HasColumnName("id_marca");
-
-                    b.Property<int>("IdOrdenCompra")
-                        .HasColumnType("int")
-                        .HasColumnName("id_orden_compra");
-
-                    b.Property<Guid>("IdProveedor")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("id_proveedor");
-
-                    b.Property<Guid?>("IdUsuario")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("id_usuario");
-
-                    b.Property<decimal>("MontoTotal")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("monto_total");
-
-                    b.Property<string>("NumeroFacturaProveedor")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)")
-                        .HasColumnName("numero_factura_proveedor");
-
-                    b.Property<string>("Observaciones")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)")
-                        .HasColumnName("observaciones");
-
-                    b.HasKey("IdRecepcionCompra");
-
-                    b.HasIndex("IdOrdenCompra")
-                        .IsUnique()
-                        .HasDatabaseName("IX_recepciones_compra_orden");
-
-                    b.ToTable("recepciones_compra");
                 });
 
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.CuentasPagarEntity", b =>

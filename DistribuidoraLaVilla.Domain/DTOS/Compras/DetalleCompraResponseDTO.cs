@@ -8,5 +8,7 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Compras
         public decimal Cantidad { get; set; }
         public decimal PrecioUnitario { get; set; }
         public decimal Subtotal { get; set; }
+        public bool VentaPorPeso { get; set; }
+        public decimal? PesoPorUnidad { get; set; }
     }
 }

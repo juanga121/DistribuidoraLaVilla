@@ -107,6 +107,17 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         Mensaje = $"No se encontró el producto con ID {detalle.IdProducto}"
                     };
                 }
+
+                var errorPrecio = ValidarPrecioDetalle(detalle);
+                if (errorPrecio != null)
+                {
+                    return new FacturaResponseDTO
+                    {
+                        Exitoso = false,
+                        Mensaje = errorPrecio
+                    };
+                }
+
                 totalEstimado += detalle.Cantidad * detalle.Precio;
             }
 
@@ -283,6 +294,13 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
         #region Private Methods
 
         /// <summary>
+        /// Valida que el precio del detalle sea mayor a 0.
+        /// Aplica a todas las líneas (unidad y peso) en todos los flujos de facturación.
+        /// </summary>
+        private static string? ValidarPrecioDetalle(CrearDetalleFacturaDTO detalle)
+            => detalle.Precio <= 0 ? "El precio debe ser mayor a 0" : null;
+
+        /// <summary>
         /// Método base transaccional para crear cualquier tipo de factura.
         /// Envuelve en IUnitOfWork: crea factura, detalles, consume inventario,
         /// y si es crédito, crea la cuenta por cobrar.
@@ -347,13 +365,14 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
 
                     var esVentaPorPeso = detalle.EsVentaPorPeso ?? producto.VentaPorPeso;
 
-                    if (esVentaPorPeso && detalle.Precio <= 0)
+                    var errorPrecio = ValidarPrecioDetalle(detalle);
+                    if (errorPrecio != null)
                     {
                         await _unitOfWork.RollbackAsync();
                         return new FacturaResponseDTO
                         {
                             Exitoso = false,
-                            Mensaje = $"El precio debe ser mayor a 0 para el producto por peso '{producto.Nombre}'"
+                            Mensaje = errorPrecio
                         };
                     }
 
@@ -362,6 +381,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         detalle.Cantidad,
                         detalle.IdUnidadMedida,
                         idUsuario,
+                        idCliente,
                         $"Venta Factura {(tipoFactura == TipoFacturaEnum.Credito ? "Crédito" : "Contado")} - Cliente: {cliente.Nombre ?? idCliente.ToString()}",
                         esVentaPorPeso,
                         producto.PesoPorUnidad
@@ -381,7 +401,8 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         Subtotal = subtotal,
                         EsVentaPorPeso = esVentaPorPeso,
                         PesoTotal = esVentaPorPeso ? cantidadTotalConsumida : null,
-                        PrecioKilo = esVentaPorPeso ? detalle.Precio : null
+                        PrecioKilo = esVentaPorPeso ? detalle.Precio : null,
+                        PrecioOriginal = esVentaPorPeso ? producto.PrecioPorKilo : (decimal?)producto.PrecioUnitario
                     });
 
                     totalFactura += subtotal;

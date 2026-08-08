@@ -42,6 +42,7 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
 
         public DbSet<OrdenCompraEntity> OrdenesCompra { get; set; }
         public DbSet<DetalleCompraEntity> DetallesCompra { get; set; }
+        public DbSet<RecepcionCompraEntity> RecepcionesCompra { get; set; }
 
         public DbSet<MovimientoEntity> Movimientos { get; set; }
 
@@ -64,6 +65,13 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
 
                 entity.HasIndex(e => e.IdProveedor)
                     .HasDatabaseName("IX_cuentas_pagar_proveedor");
+            });
+
+            modelBuilder.Entity<RecepcionCompraEntity>(entity =>
+            {
+                entity.HasIndex(e => e.IdOrdenCompra)
+                    .IsUnique()
+                    .HasDatabaseName("IX_recepciones_compra_orden");
             });
         }
     }

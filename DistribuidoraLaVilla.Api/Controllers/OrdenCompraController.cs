@@ -63,6 +63,36 @@ namespace DistribuidoraLaVilla.Api.Controllers
         }
 
         /// <summary>
+        /// Registra la recepción e invoice de una orden aprobada.
+        /// </summary>
+        [HttpPost("Recibir/{id}")]
+        public async Task<ActionResult> Recibir(int id, [FromBody] RegistrarRecepcionCompraDTO dto)
+        {
+            try
+            {
+                var userId = GetUserId();
+                await _service.RegistrarRecepcionCompraAsync(id, dto, userId);
+                return Ok(new { mensaje = "Recepción registrada correctamente" });
+            }
+            catch (ValidationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = $"Error interno al registrar la recepción de compra: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
         /// Retorna una orden de compra por su ID, incluyendo detalles.
         /// </summary>
         [HttpGet("ObtenerPorId/{id}")]

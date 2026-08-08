@@ -38,6 +38,7 @@ namespace DistribuidoraLaVilla.Application.Interfaces
         /// <param name="cantidadRequerida">Cantidad total a consumir</param>
         /// <param name="idUnidadMedida">Unidad de medida</param>
         /// <param name="idUsuario">Usuario que realiza la operación</param>
+        /// <param name="idCliente">Cliente al que se le descuenta el stock</param>
         /// <param name="observacion">Descripción del movimiento</param>
         /// <param name="esVentaPorPeso">Indica si la venta se realiza por peso para ese detalle</param>
         /// <param name="pesoPorUnidad">Peso por unidad en kg (para conversión unitario↔peso)</param>
@@ -47,6 +48,7 @@ namespace DistribuidoraLaVilla.Application.Interfaces
             decimal cantidadRequerida,
             int idUnidadMedida,
             Guid idUsuario,
+            Guid idCliente,
             string observacion,
             bool esVentaPorPeso,
             decimal? pesoPorUnidad = null);

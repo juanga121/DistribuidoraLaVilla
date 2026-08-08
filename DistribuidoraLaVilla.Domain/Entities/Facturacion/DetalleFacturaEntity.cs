@@ -40,5 +40,8 @@ namespace DistribuidoraLaVilla.Domain.Entities.Facturacion
 
         [Column("precio_kilo")]
         public decimal? PrecioKilo { get; set; }
+
+        [Column("precio_original", TypeName = "decimal(18,2)")]
+        public decimal? PrecioOriginal { get; set; }
     }
 }

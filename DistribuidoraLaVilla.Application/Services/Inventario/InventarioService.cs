@@ -144,6 +144,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             decimal cantidadRequerida,
             int idUnidadMedida,
             Guid idUsuario,
+            Guid idCliente,
             string observacion,
             bool esVentaPorPeso,
             decimal? pesoPorUnidad = null)
@@ -249,7 +250,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                     Cantidad = cantidadAConsumir,
                     TotalMovimiento = cantidadAConsumir * costBasis,
                     IdUnidadMedida = idUnidadMedida,
-                    IdEntidad = null,
+                    IdEntidad = idCliente == Guid.Empty ? null : idCliente,
                     IdUsuario = idUsuario,
                     Observacion = observacion,
                     Estado = 1
