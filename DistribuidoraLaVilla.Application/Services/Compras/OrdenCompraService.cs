@@ -1,11 +1,13 @@
 using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Domain.DTOS.Compras;
 using DistribuidoraLaVilla.Domain.Entities;
+using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Compras;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
 using DistribuidoraLaVilla.Domain.Enums;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 
 namespace DistribuidoraLaVilla.Application.Services.Compras
 {
@@ -19,7 +21,11 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
         IGenericRepository<CuentasPagarEntity, int> cuentasPagarRepository,
         IGenericRepository<LotesProductosEntity, int> lotesProductosRepository,
         IGenericRepository<MovimientosProductosEntity, int> movimientosProductosRepository,
-        IUnitOfWork unitOfWork)
+        IGenericRepository<CajaAperturaEntity, int> cajaAperturaRepository,
+        IGenericRepository<CajaMovimientoEntity, int> cajaMovimientoRepository,
+        IUnitOfWork unitOfWork,
+        IGenericRepository<UnidadMedidaEntity, int>? unidadMedidaRepository = null,
+        IGenericRepository<UsuariosEntity, Guid>? usuariosRepository = null)
     {
         private readonly IGenericRepository<OrdenCompraEntity, int> _ordenCompraRepository = ordenCompraRepository;
         private readonly IGenericRepository<DetalleCompraEntity, int> _detalleRepository = detalleRepository;
@@ -30,6 +36,10 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
         private readonly IGenericRepository<CuentasPagarEntity, int> _cuentasPagarRepository = cuentasPagarRepository;
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesProductosRepository = lotesProductosRepository;
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosProductosRepository = movimientosProductosRepository;
+        private readonly IGenericRepository<CajaAperturaEntity, int> _cajaAperturaRepository = cajaAperturaRepository;
+        private readonly IGenericRepository<CajaMovimientoEntity, int> _cajaMovimientoRepository = cajaMovimientoRepository;
+        private readonly IGenericRepository<UnidadMedidaEntity, int>? _unidadMedidaRepository = unidadMedidaRepository;
+        private readonly IGenericRepository<UsuariosEntity, Guid>? _usuariosRepository = usuariosRepository;
         private readonly IUnitOfWork _unitOfWork = unitOfWork;
         private readonly CrearOrdenCompraDTOValidator _validator = new();
         private readonly RegistrarRecepcionCompraDTOValidator _recepcionValidator = new();
@@ -145,6 +155,74 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
             return response;
         }
 
+        /// <summary>
+        /// Genera el comprobante de recepción de compra de una orden (CA06).
+        /// La recepción es 1:1 con la orden, por lo que se busca por IdOrdenCompra.
+        /// </summary>
+        public async Task<ComprobanteCompraDTO?> ObtenerComprobanteRecepcionAsync(int idOrdenCompra)
+        {
+            var recepcion = _recepcionCompraRepository
+                .GetByFilter(r => r.IdOrdenCompra == idOrdenCompra)
+                .FirstOrDefault();
+
+            if (recepcion == null)
+            {
+                throw new KeyNotFoundException(
+                    $"No se encontró una recepción de compra para la orden con ID {idOrdenCompra}");
+            }
+
+            var proveedor = await _proveedorRepository.FindByIdAsync(recepcion.IdProveedor);
+
+            string? usuarioNombre = null;
+            if (recepcion.IdUsuario.HasValue && _usuariosRepository != null)
+            {
+                var usuario = await _usuariosRepository.FindByIdAsync(recepcion.IdUsuario.Value);
+                usuarioNombre = usuario?.Nombre ?? usuario?.Email;
+            }
+
+            var lotes = _lotesProductosRepository
+                .GetByFilter(l => l.IdRecepcionCompra == recepcion.IdRecepcionCompra)
+                .ToList();
+
+            var detalles = new List<ComprobanteCompraDetalleDTO>();
+            decimal total = 0;
+
+            foreach (var lote in lotes)
+            {
+                var producto = await _productoRepository.FindByIdAsync(lote.IdProducto);
+                var unidad = _unidadMedidaRepository != null
+                    ? await _unidadMedidaRepository.FindByIdAsync(lote.IdUnidadMedida)
+                    : null;
+
+                var subtotal = lote.PrecioTotal;
+                total += subtotal;
+
+                detalles.Add(new ComprobanteCompraDetalleDTO
+                {
+                    ProductoNombre = producto?.Nombre ?? $"Producto ID {lote.IdProducto}",
+                    Cantidad = lote.CantidadUnidades,
+                    UnidadMedida = unidad?.Abreviatura ?? "",
+                    PrecioUnitario = lote.PrecioUnitario,
+                    Subtotal = subtotal
+                });
+            }
+
+            return new ComprobanteCompraDTO
+            {
+                IdRecepcionCompra = recepcion.IdRecepcionCompra,
+                IdOrdenCompra = recepcion.IdOrdenCompra,
+                NumeroFacturaProveedor = recepcion.NumeroFacturaProveedor,
+                FechaFactura = recepcion.FechaFactura,
+                FechaRecepcion = recepcion.FechaRecepcion,
+                ProveedorNombre = proveedor?.Nombre,
+                FormaPago = recepcion.FormaPago,
+                FormaPagoTexto = recepcion.FormaPago == (int)FormaPago.Contado ? "Contado" : "Crédito",
+                UsuarioNombre = usuarioNombre,
+                Detalles = detalles,
+                Total = total
+            };
+        }
+
         public async Task ActualizarEstadoOrdenAsync(int id, int nuevoEstado, Guid idUsuario)
         {
             var orden = await _ordenCompraRepository.FindByIdAsync(id)
@@ -175,6 +253,14 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
             {
                 var errores = string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage));
                 throw new ValidationException(errores);
+            }
+
+            // Backward compatible: a missing FormaPago (old frontend) defaults to Crédito,
+            // which matches the historical behavior of always creating CxP.
+            var formaPago = dto.FormaPago ?? (int)FormaPago.Credito;
+            if (formaPago != (int)FormaPago.Contado && formaPago != (int)FormaPago.Credito)
+            {
+                throw new ValidationException($"La forma de pago debe ser Contado (1) o Crédito (2). Valor recibido: {formaPago}");
             }
 
             await _unitOfWork.BeginTransactionAsync();
@@ -217,6 +303,7 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                     FechaVencimientoLotes = dto.FechaVencimientoLotes,
                     IdMarca = dto.IdMarca,
                     MontoTotal = orden.Total,
+                    FormaPago = formaPago,
                     Observaciones = dto.Observaciones,
                     Estado = 1,
                     FechaCreacion = DateTime.Now,
@@ -263,7 +350,39 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                     IdUsuario = idUsuario == Guid.Empty ? null : idUsuario
                 };
 
-                await _cuentasPagarRepository.CreateAsync(cuentaPagar);
+                if (formaPago == (int)FormaPago.Contado)
+                {
+                    // Cash purchase: requires an open cash register. The egreso is persisted
+                    // inside the same transaction as the reception, so a failure anywhere
+                    // rolls back the whole operation.
+                    var cajaAbierta = await _cajaAperturaRepository.GetQueryable()
+                        .Where(c => c.Estado == (int)EstadoCajaEnum.Abierta)
+                        .OrderByDescending(c => c.FechaApertura)
+                        .FirstOrDefaultAsync();
+
+                    if (cajaAbierta == null)
+                    {
+                        throw new InvalidOperationException(
+                            "No hay una caja abierta: para registrar una compra de contado debe existir una caja abierta. Abra la caja o registre la compra a crédito");
+                    }
+
+                    var movimientoCaja = new CajaMovimientoEntity
+                    {
+                        IdApertura = cajaAbierta.Id,
+                        TipoMovimiento = (int)TipoMovimientoCajaEnum.Egreso,
+                        Concepto = $"Pago contado OC #{orden.Id} - Factura {recepcion.NumeroFacturaProveedor}",
+                        Monto = totalRecepcion,
+                        Fecha = DateTime.Now,
+                        IdUsuario = idUsuario,
+                        MetodoPago = null
+                    };
+
+                    await _cajaMovimientoRepository.CreateAsync(movimientoCaja);
+                }
+                else
+                {
+                    await _cuentasPagarRepository.CreateAsync(cuentaPagar);
+                }
 
                 orden.Estado = (int)EstadoCompraEnum.Recibida;
                 orden.FechaRecepcion = dto.FechaRecepcion;
@@ -362,6 +481,7 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                 PrecioKilo = detalle.PrecioKilo,
                 PrecioTotal = detalle.CantidadUnidades * detalle.PrecioUnitario,
                 IdMarca = recepcion.IdMarca,
+                IdRecepcionCompra = recepcion.IdRecepcionCompra,
                 CantidadInicial = cantidadDisponible,
                 CantidadDisponible = cantidadDisponible,
                 PesoDisponible = pesoDisponible,

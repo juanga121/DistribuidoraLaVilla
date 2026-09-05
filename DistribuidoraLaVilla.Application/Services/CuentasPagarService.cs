@@ -1,6 +1,8 @@
 using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
+using DistribuidoraLaVilla.Domain.DTOS.Caja;
 using DistribuidoraLaVilla.Domain.Entities;
+using DistribuidoraLaVilla.Domain.Enums;
 using DistribuidoraLaVilla.Domain.Interfaces;
 
 namespace DistribuidoraLaVilla.Application.Services
@@ -9,19 +11,44 @@ namespace DistribuidoraLaVilla.Application.Services
     {
         private readonly IGenericRepository<CuentasPagarEntity, int> _cxpRepository;
         private readonly IGenericRepository<ProveedoresEntity, Guid> _proveedoresRepository;
+        private readonly IGenericRepository<PagoCxPEntity, int> _pagoRepository;
         private readonly IAuditoriaService _auditoriaService;
         private readonly MovimientosFinancierosService _movimientosService;
+        private readonly ICajaService _cajaService;
+        private readonly IUnitOfWork _unitOfWork;
 
         public CuentasPagarService(
             IGenericRepository<CuentasPagarEntity, int> cxpRepository,
             IGenericRepository<ProveedoresEntity, Guid> proveedoresRepository,
             IAuditoriaService auditoriaService,
             MovimientosFinancierosService movimientosService)
+            : this(
+                cxpRepository: cxpRepository,
+                proveedoresRepository: proveedoresRepository,
+                pagoRepository: null,
+                auditoriaService: auditoriaService,
+                movimientosService: movimientosService,
+                cajaService: null,
+                unitOfWork: null)
+        {
+        }
+
+        public CuentasPagarService(
+            IGenericRepository<CuentasPagarEntity, int> cxpRepository,
+            IGenericRepository<ProveedoresEntity, Guid> proveedoresRepository,
+            IGenericRepository<PagoCxPEntity, int> pagoRepository,
+            IAuditoriaService auditoriaService,
+            MovimientosFinancierosService movimientosService,
+            ICajaService cajaService,
+            IUnitOfWork unitOfWork)
         {
             _cxpRepository = cxpRepository;
             _proveedoresRepository = proveedoresRepository;
+            _pagoRepository = pagoRepository;
             _auditoriaService = auditoriaService;
             _movimientosService = movimientosService;
+            _cajaService = cajaService;
+            _unitOfWork = unitOfWork;
         }
 
         public async Task<CuentasPagarDTO> CrearAsync(CrearCxPDTO dto, Guid idUsuario)
@@ -73,7 +100,22 @@ namespace DistribuidoraLaVilla.Application.Services
         {
             List<CuentasPagarEntity> entities;
 
-            if (estado.HasValue)
+            if (estado == (int)EstadoCuentaPagar.Vencida)
+            {
+                var ahora = DateTime.Now;
+                entities = _cxpRepository.GetByFilter(c =>
+                    c.Estado == (int)EstadoCuentaPagar.Pendiente &&
+                    c.SaldoPendiente > 0 &&
+                    c.FechaVencimiento < ahora);
+            }
+            else if (estado == (int)EstadoCuentaPagar.ParcialmentePagada)
+            {
+                entities = _cxpRepository.GetByFilter(c =>
+                    c.Estado == (int)EstadoCuentaPagar.Pendiente &&
+                    c.SaldoPendiente > 0 &&
+                    c.SaldoPendiente < c.MontoTotal);
+            }
+            else if (estado.HasValue)
             {
                 entities = _cxpRepository.GetByFilter(c => c.Estado == estado.Value);
             }
@@ -123,7 +165,7 @@ namespace DistribuidoraLaVilla.Application.Services
                 throw new Exception("El monto total no puede ser menor al monto ya pagado");
 
             if (entity.SaldoPendiente == 0)
-                entity.Estado = 2;
+                entity.Estado = (int)EstadoCuentaPagar.Pagada;
 
             entity.Descripcion = dto.Descripcion;
             entity.FechaVencimiento = dto.FechaVencimiento;
@@ -193,7 +235,7 @@ namespace DistribuidoraLaVilla.Application.Services
             if (entity == null)
                 throw new Exception("La cuenta por pagar no existe");
 
-            if (entity.Estado != 1)
+            if (entity.Estado != (int)EstadoCuentaPagar.Pendiente)
                 throw new Exception("La cuenta por pagar no está pendiente de pago");
 
             if (dto.Monto <= 0)
@@ -202,43 +244,103 @@ namespace DistribuidoraLaVilla.Application.Services
             if (dto.Monto > entity.SaldoPendiente)
                 throw new Exception("El pago excede el saldo pendiente");
 
-            entity.SaldoPendiente -= dto.Monto;
-
-            if (entity.SaldoPendiente == 0)
-                entity.Estado = 2;
-
-            entity.FechaActualizacion = DateTime.Now;
-            entity.IdUsuario = idUsuario == Guid.Empty ? entity.IdUsuario : idUsuario;
-
-            await _cxpRepository.UpdateAsync(entity);
-
-            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            if (_pagoRepository == null || _cajaService == null || _unitOfWork == null)
             {
-                TipoMovimiento = "CxP",
-                SubTipo = "Pago",
-                Descripcion = $"Pago de cuenta por pagar #{id}",
-                Monto = dto.Monto,
-                Direccion = "Egreso",
-                OrigenModulo = "CuentasPagar",
-                ReferenciaId = entity.IdCuentaPagar,
-                FechaMovimiento = DateTime.Now,
-                Estado = 1
-            }, idUsuario);
+                throw new InvalidOperationException(
+                    "El registro de pago requiere caja, transacción y repositorio de pagos (infraestructura completa)");
+            }
+
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                entity.SaldoPendiente -= dto.Monto;
+
+                if (entity.SaldoPendiente == 0)
+                    entity.Estado = (int)EstadoCuentaPagar.Pagada;
+
+                entity.FechaActualizacion = DateTime.Now;
+                entity.IdUsuario = idUsuario == Guid.Empty ? entity.IdUsuario : idUsuario;
+
+                await _cxpRepository.UpdateAsync(entity);
+
+                var pago = new PagoCxPEntity
+                {
+                    IdCuentaPagar = entity.IdCuentaPagar,
+                    Monto = dto.Monto,
+                    FechaPago = DateTime.Now,
+                    FechaCreacion = DateTime.Now,
+                    IdUsuario = idUsuario == Guid.Empty ? null : idUsuario,
+                    MetodoPago = dto.MetodoPago,
+                    Observacion = dto.Observacion
+                };
+                await _pagoRepository.CreateAsync(pago);
+
+                await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+                {
+                    TipoMovimiento = "CxP",
+                    SubTipo = "Pago",
+                    Descripcion = $"Pago de cuenta por pagar #{id}",
+                    Monto = dto.Monto,
+                    Direccion = "Egreso",
+                    OrigenModulo = "CuentasPagar",
+                    ReferenciaId = entity.IdCuentaPagar,
+                    FechaMovimiento = DateTime.Now,
+                    Estado = 1
+                }, idUsuario);
+
+                // Egreso de caja dentro de la MISMA transacción. Requiere caja abierta:
+                // si no hay, lanza error y se revierte todo (saldo, historial, movimiento).
+                await _cajaService.RegistrarEgresoTransaccionalAsync(new RegistrarEgresoDTO
+                {
+                    IdUsuario = idUsuario,
+                    Monto = dto.Monto,
+                    Concepto = $"Pago de cuenta por pagar #{entity.IdCuentaPagar}",
+                    MetodoPago = dto.MetodoPago
+                });
+
+                await _auditoriaService.RegistrarAsync(
+                    "CuentasPagar",
+                    entity.IdCuentaPagar.ToString(),
+                    "RegistrarPago",
+                    $"Pago de {dto.Monto} registrado. Saldo pendiente: {entity.SaldoPendiente}",
+                    idUsuario);
+
+                await _unitOfWork.CommitAsync();
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
 
             var proveedor = await _proveedoresRepository.FindByIdAsync(entity.IdProveedor);
-
-            await _auditoriaService.RegistrarAsync(
-                "CuentasPagar",
-                entity.IdCuentaPagar.ToString(),
-                "RegistrarPago",
-                $"Pago de {dto.Monto} registrado. Saldo pendiente: {entity.SaldoPendiente}",
-                idUsuario);
-
             return MapearADTO(entity, proveedor?.Nombre);
+        }
+
+        public async Task<List<PagoCxPDTO>> ObtenerPagosAsync(int idCuentaPagar)
+        {
+            var cuenta = await _cxpRepository.FindByIdAsync(idCuentaPagar);
+            if (cuenta == null)
+                throw new Exception("La cuenta por pagar no existe");
+
+            var pagos = _pagoRepository?.GetByFilter(p => p.IdCuentaPagar == idCuentaPagar)
+                ?? new List<PagoCxPEntity>();
+
+            return pagos
+                .OrderByDescending(p => p.FechaPago)
+                .Select(MapToPagoDTO)
+                .ToList();
         }
 
         private static CuentasPagarDTO MapearADTO(CuentasPagarEntity entity, string? proveedorNombre)
         {
+            var estadoEfectivo = ObtenerEstadoEfectivo(entity);
+            var ahora = DateTime.Now;
+            var fechaVencimiento = entity.FechaVencimiento ?? DateTime.Now;
+            var diasVencidos = (ahora > fechaVencimiento)
+                ? (int)(ahora - fechaVencimiento).TotalDays
+                : 0;
+
             return new CuentasPagarDTO
             {
                 IdCuentaPagar = entity.IdCuentaPagar,
@@ -247,24 +349,67 @@ namespace DistribuidoraLaVilla.Application.Services
                 IdOrdenCompra = entity.IdOrdenCompra,
                 MontoTotal = entity.MontoTotal,
                 SaldoPendiente = entity.SaldoPendiente,
+                MontoPagado = entity.MontoTotal - entity.SaldoPendiente,
                 Descripcion = entity.Descripcion,
                 FechaVencimiento = entity.FechaVencimiento,
-                Estado = entity.Estado,
-                EstadoDescripcion = ObtenerEstadoDescripcion(entity.Estado),
+                Estado = estadoEfectivo,
+                EstadoDescripcion = ObtenerEstadoDescripcion(estadoEfectivo),
+                DiasVencidos = diasVencidos,
                 FechaCreacion = entity.FechaCreacion,
                 FechaActualizacion = entity.FechaActualizacion,
                 IdUsuario = entity.IdUsuario
             };
         }
 
+        private static int ObtenerEstadoEfectivo(CuentasPagarEntity entity)
+        {
+            if (entity.Estado == (int)EstadoCuentaPagar.Cancelada)
+                return (int)EstadoCuentaPagar.Cancelada;
+
+            if (entity.Estado == (int)EstadoCuentaPagar.Pagada || entity.SaldoPendiente <= 0)
+                return (int)EstadoCuentaPagar.Pagada;
+
+            if (entity.FechaVencimiento.HasValue && entity.FechaVencimiento.Value < DateTime.Now)
+                return (int)EstadoCuentaPagar.Vencida;
+
+            if (entity.MontoTotal - entity.SaldoPendiente > 0)
+                return (int)EstadoCuentaPagar.ParcialmentePagada;
+
+            return (int)EstadoCuentaPagar.Pendiente;
+        }
+
         private static string ObtenerEstadoDescripcion(int estado)
         {
             return estado switch
             {
-                1 => "Pendiente",
-                2 => "Pagada",
-                3 => "Cancelada",
+                (int)EstadoCuentaPagar.Pendiente => "Pendiente",
+                (int)EstadoCuentaPagar.Pagada => "Pagada",
+                (int)EstadoCuentaPagar.Cancelada => "Cancelada",
+                (int)EstadoCuentaPagar.ParcialmentePagada => "Parcialmente Pagada",
+                (int)EstadoCuentaPagar.Vencida => "Vencida",
                 _ => "Desconocido"
+            };
+        }
+
+        private static PagoCxPDTO MapToPagoDTO(PagoCxPEntity pago)
+        {
+            return new PagoCxPDTO
+            {
+                IdPago = pago.IdPago,
+                IdCuentaPagar = pago.IdCuentaPagar,
+                Monto = pago.Monto,
+                FechaPago = pago.FechaPago,
+                IdUsuario = pago.IdUsuario,
+                FechaCreacion = pago.FechaCreacion,
+                MetodoPago = pago.MetodoPago,
+                MetodoPagoDescripcion = pago.MetodoPago switch
+                {
+                    1 => "Efectivo",
+                    2 => "Transferencia",
+                    3 => "Tarjeta",
+                    _ => null
+                },
+                Observacion = pago.Observacion
             };
         }
     }

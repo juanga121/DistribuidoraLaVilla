@@ -8,6 +8,7 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Compras
         public DateTime FechaVencimiento { get; set; }
         public DateTime FechaVencimientoLotes { get; set; }
         public int IdMarca { get; set; }
+        public int? FormaPago { get; set; }
         public string? Observaciones { get; set; }
         public List<RegistrarRecepcionCompraDetalleDTO> Detalles { get; set; } = new();
     }

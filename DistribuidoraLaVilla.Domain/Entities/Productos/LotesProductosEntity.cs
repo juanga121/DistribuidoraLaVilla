@@ -48,6 +48,9 @@ namespace DistribuidoraLaVilla.Domain.Entities.Productos
         [Column("id_marca")]
         public int IdMarca { get; set; }
 
+        [Column("id_recepcion_compra")]
+        public int? IdRecepcionCompra { get; set; }
+
         [Column("cantidad_inicial")]
         public decimal CantidadInicial { get; set; }
 

@@ -49,5 +49,15 @@ namespace DistribuidoraLaVilla.Domain.Entities
 
         [Column("dias_credito")]
         public int? DiasCredito { get; set; }
+
+        [Column("tipo_persona")]
+        public int TipoPersona { get; set; } = (int)DistribuidoraLaVilla.Domain.Enums.TipoPersona.Natural;
+
+        /// <summary>
+        /// Descripción legible del tipo de persona. Getter-only: no se persiste,
+        /// solo se expone en la respuesta JSON.
+        /// </summary>
+        public string TipoPersonaDescripcion =>
+            TipoPersona == (int)DistribuidoraLaVilla.Domain.Enums.TipoPersona.Juridica ? "Jurídica" : "Natural";
     }
 }

@@ -1,6 +1,7 @@
 using DistribuidoraLaVilla.Application.Services.Compras;
 using DistribuidoraLaVilla.Domain.DTOS.Compras;
 using DistribuidoraLaVilla.Domain.Entities;
+using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Compras;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
 using DistribuidoraLaVilla.Domain.Enums;
@@ -21,6 +22,8 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
         private readonly Mock<IGenericRepository<CuentasPagarEntity, int>> _cxpRepo = new();
         private readonly Mock<IGenericRepository<LotesProductosEntity, int>> _lotesRepo = new();
         private readonly Mock<IGenericRepository<MovimientosProductosEntity, int>> _movimientosRepo = new();
+        private readonly Mock<IGenericRepository<CajaAperturaEntity, int>> _cajaAperturaRepo = new();
+        private readonly Mock<IGenericRepository<CajaMovimientoEntity, int>> _cajaMovimientoRepo = new();
         private readonly Mock<IUnitOfWork> _uow = new();
         private readonly OrdenCompraService _service;
 
@@ -39,6 +42,8 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                 _cxpRepo.Object,
                 _lotesRepo.Object,
                 _movimientosRepo.Object,
+                _cajaAperturaRepo.Object,
+                _cajaMovimientoRepo.Object,
                 _uow.Object);
 
             _uow.Setup(u => u.BeginTransactionAsync(default)).Returns(Task.CompletedTask);
@@ -160,6 +165,8 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             recepcionCapturada!.IdOrdenCompra.Should().Be(10);
             recepcionCapturada.NumeroFacturaProveedor.Should().Be(dto.NumeroFacturaProveedor);
             recepcionCapturada.IdMarca.Should().Be(dto.IdMarca);
+            // FormaPago no enviado => default Crédito (backward compat).
+            recepcionCapturada.FormaPago.Should().Be((int)FormaPago.Credito);
 
             cxpCapturada.Should().NotBeNull();
             cxpCapturada!.IdOrdenCompra.Should().Be(10);
@@ -169,6 +176,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             lotesCapturados[0].IdUnidadMedida.Should().Be(2);
             lotesCapturados[1].IdUnidadMedida.Should().Be(1);
             lotesCapturados[1].PesoDisponible.Should().Be(3m);
+            lotesCapturados.Should().OnlyContain(l => l.IdRecepcionCompra == recepcionCapturada.IdRecepcionCompra);
 
             movimientosCapturados.Should().HaveCount(2);
             ordenCapturada.Should().NotBeNull();
@@ -226,6 +234,104 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             await _service.ActualizarEstadoOrdenAsync(10, (int)EstadoCompraEnum.Cancelada, UsuarioId);
 
             _ordenRepo.Verify(r => r.UpdateAsync(It.Is<OrdenCompraEntity>(o => o.Estado == (int)EstadoCompraEnum.Cancelada)), Times.Once);
+        }
+
+        [Fact]
+        public async Task RegistrarRecepcionCompraAsync_CuandoEsContado_DeberiaRegistrarEgresoCajaYNoCrearCxP()
+        {
+            SetupCommon();
+            var dto = CreateDto();
+            dto.FormaPago = (int)FormaPago.Contado;
+
+            _cajaAperturaRepo.Setup(r => r.GetQueryable())
+                .Returns(new List<CajaAperturaEntity>
+                {
+                    new() { Id = 1, Estado = (int)EstadoCajaEnum.Abierta, MontoInicial = 100m }
+                }.AsQueryable());
+
+            CajaMovimientoEntity? egresoCapturado = null;
+            var cxpHuboLlamada = false;
+
+            _cajaMovimientoRepo.Setup(r => r.CreateAsync(It.IsAny<CajaMovimientoEntity>()))
+                .Callback<CajaMovimientoEntity>(e => egresoCapturado = e)
+                .Returns(Task.CompletedTask);
+            _cxpRepo.Setup(r => r.CreateAsync(It.IsAny<CuentasPagarEntity>()))
+                .Callback(() => cxpHuboLlamada = true)
+                .Returns(Task.CompletedTask);
+
+            await _service.RegistrarRecepcionCompraAsync(10, dto, UsuarioId);
+
+            egresoCapturado.Should().NotBeNull();
+            egresoCapturado!.IdApertura.Should().Be(1);
+            egresoCapturado.TipoMovimiento.Should().Be((int)TipoMovimientoCajaEnum.Egreso);
+            egresoCapturado.Monto.Should().Be(400m);
+            cxpHuboLlamada.Should().BeFalse();
+
+            _uow.Verify(u => u.CommitAsync(default), Times.Once);
+            _uow.Verify(u => u.RollbackAsync(default), Times.Never);
+        }
+
+        [Fact]
+        public async Task RegistrarRecepcionCompraAsync_CuandoEsContadoSinCajaAbierta_DeberiaBloquear()
+        {
+            SetupCommon();
+            var dto = CreateDto();
+            dto.FormaPago = (int)FormaPago.Contado;
+
+            _cajaAperturaRepo.Setup(r => r.GetQueryable())
+                .Returns(Enumerable.Empty<CajaAperturaEntity>().AsQueryable());
+
+            var act = async () => await _service.RegistrarRecepcionCompraAsync(10, dto, UsuarioId);
+
+            await act.Should().ThrowAsync<InvalidOperationException>()
+                .WithMessage("*caja abierta*");
+
+            _cajaMovimientoRepo.Verify(r => r.CreateAsync(It.IsAny<CajaMovimientoEntity>()), Times.Never);
+            _cxpRepo.Verify(r => r.CreateAsync(It.IsAny<CuentasPagarEntity>()), Times.Never);
+            _uow.Verify(u => u.CommitAsync(default), Times.Never);
+            _uow.Verify(u => u.RollbackAsync(default), Times.Once);
+        }
+
+        [Fact]
+        public async Task RegistrarRecepcionCompraAsync_CuandoEsCredito_DeberiaCrearCxPYNoEgresoCaja()
+        {
+            SetupCommon();
+            var dto = CreateDto();
+            dto.FormaPago = (int)FormaPago.Credito;
+
+            CuentasPagarEntity? cxpCapturada = null;
+            CajaMovimientoEntity? egresoCapturado = null;
+
+            _cxpRepo.Setup(r => r.CreateAsync(It.IsAny<CuentasPagarEntity>()))
+                .Callback<CuentasPagarEntity>(e => cxpCapturada = e)
+                .Returns(Task.CompletedTask);
+            _cajaMovimientoRepo.Setup(r => r.CreateAsync(It.IsAny<CajaMovimientoEntity>()))
+                .Callback<CajaMovimientoEntity>(e => egresoCapturado = e)
+                .Returns(Task.CompletedTask);
+
+            await _service.RegistrarRecepcionCompraAsync(10, dto, UsuarioId);
+
+            cxpCapturada.Should().NotBeNull();
+            cxpCapturada!.MontoTotal.Should().Be(400m);
+            egresoCapturado.Should().BeNull();
+
+            _uow.Verify(u => u.CommitAsync(default), Times.Once);
+            _uow.Verify(u => u.RollbackAsync(default), Times.Never);
+        }
+
+        [Fact]
+        public async Task RegistrarRecepcionCompraAsync_CuandoFormaPagoInvalida_DeberiaFallar()
+        {
+            SetupCommon();
+            var dto = CreateDto();
+            dto.FormaPago = 99;
+
+            var act = async () => await _service.RegistrarRecepcionCompraAsync(10, dto, UsuarioId);
+
+            await act.Should().ThrowAsync<FluentValidation.ValidationException>()
+                .WithMessage("*Contado (1) o Crédito (2)*");
+
+            _uow.Verify(u => u.BeginTransactionAsync(default), Times.Never);
         }
     }
 }

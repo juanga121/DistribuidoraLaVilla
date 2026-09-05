@@ -22,7 +22,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         IGenericRepository<ProveedoresEntity, Guid> proveedoresRepository,
         IGenericRepository<MarcasEntity, int> marcasRepository,
         IGenericRepository<UnidadMedidaEntity, int> unidadMedidaRepository,
-        IAuditoriaService auditoriaService)
+        IAuditoriaService auditoriaService,
+        IUnitOfWork? unitOfWork = null)
     {
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesProductosRepository = lotesProductosRepository;
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosProductosRepository = movimientosProductosRepository;
@@ -31,6 +32,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         private readonly IGenericRepository<MarcasEntity, int> _marcasRepository = marcasRepository;
         private readonly IGenericRepository<UnidadMedidaEntity, int> _unidadMedidaRepository = unidadMedidaRepository;
         private readonly IAuditoriaService _auditoriaService = auditoriaService;
+        private readonly IUnitOfWork? _unitOfWork = unitOfWork;
 
         public async Task CrearLoteProductoAsync(LotesProductosDTO lotesProductosDTO)
         {
@@ -42,70 +44,91 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 throw new ValidationException(validationResult.Errors);
             }
 
-            var precioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
-
-            var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto);
-            var pesoPorUnidad = producto?.PesoPorUnidad;
-
-            decimal cantidadDisponible;
-            decimal pesoDisponible;
-            if (pesoPorUnidad.HasValue)
-            {
-                cantidadDisponible = lotesProductosDTO.CantidadUnidades;
-                pesoDisponible = lotesProductosDTO.CantidadUnidades * pesoPorUnidad.Value;
-            }
-            else
-            {
-                cantidadDisponible = lotesProductosDTO.PesoTotal;
-                pesoDisponible = lotesProductosDTO.PesoTotal;
-            }
-
-            LotesProductosEntity entity = new()
-            {
-                IdProducto = lotesProductosDTO.IdProducto,
-                IdProveedor = lotesProductosDTO.IdProveedor,
-                FechaEntrada = DateTime.Now,
-                FechaVencimiento = lotesProductosDTO.FechaVencimiento,
-                CantidadUnidades = lotesProductosDTO.CantidadUnidades,
-                PesoTotal = lotesProductosDTO.PesoTotal,
-                IdUnidadMedida = lotesProductosDTO.IdUnidadMedida,
-                PrecioUnitario = lotesProductosDTO.PrecioUnitario,
-                PrecioKilo = lotesProductosDTO.PrecioKilo,
-                PrecioTotal = precioTotal,
-                IdMarca = lotesProductosDTO.IdMarca,
-                CantidadInicial = cantidadDisponible,
-                CantidadDisponible = cantidadDisponible,
-                PesoDisponible = pesoDisponible,
-                Estado = 1
-            };
-            await _lotesProductosRepository.CreateAsync(entity);
+            bool ownTransaction = _unitOfWork != null && !_unitOfWork.HasActiveTransaction;
+            if (ownTransaction)
+                await _unitOfWork!.BeginTransactionAsync();
 
             try
             {
-                var detalle = JsonSerializer.Serialize(new
-                {
-                    idProducto = entity.IdProducto,
-                    cantidadUnidades = entity.CantidadUnidades,
-                    pesoTotal = entity.PesoTotal,
-                    precioTotal
-                });
-                await _auditoriaService.RegistrarAsync("StockProducto", entity.Id.ToString(), "CrearLote", detalle, lotesProductosDTO.IdUsuario);
-            }
-            catch { /* fire-and-forget */ }
+                var precioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
 
-            var movimiento = new MovimientosProductosEntity
+                var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto);
+                var pesoPorUnidad = producto?.PesoPorUnidad;
+
+                decimal cantidadDisponible;
+                decimal pesoDisponible;
+                if (pesoPorUnidad.HasValue)
+                {
+                    cantidadDisponible = lotesProductosDTO.CantidadUnidades;
+                    pesoDisponible = lotesProductosDTO.CantidadUnidades * pesoPorUnidad.Value;
+                }
+                else
+                {
+                    cantidadDisponible = lotesProductosDTO.PesoTotal;
+                    pesoDisponible = lotesProductosDTO.PesoTotal;
+                }
+
+                LotesProductosEntity entity = new()
+                {
+                    IdProducto = lotesProductosDTO.IdProducto,
+                    IdProveedor = lotesProductosDTO.IdProveedor,
+                    FechaEntrada = DateTime.Now,
+                    FechaVencimiento = lotesProductosDTO.FechaVencimiento,
+                    CantidadUnidades = lotesProductosDTO.CantidadUnidades,
+                    PesoTotal = lotesProductosDTO.PesoTotal,
+                    IdUnidadMedida = lotesProductosDTO.IdUnidadMedida,
+                    PrecioUnitario = lotesProductosDTO.PrecioUnitario,
+                    PrecioKilo = lotesProductosDTO.PrecioKilo,
+                    PrecioTotal = precioTotal,
+                    IdMarca = lotesProductosDTO.IdMarca,
+                    CantidadInicial = cantidadDisponible,
+                    CantidadDisponible = cantidadDisponible,
+                    PesoDisponible = pesoDisponible,
+                    Estado = 1
+                };
+                await _lotesProductosRepository.CreateAsync(entity);
+
+                try
+                {
+                    var detalle = JsonSerializer.Serialize(new
+                    {
+                        idProducto = entity.IdProducto,
+                        cantidadUnidades = entity.CantidadUnidades,
+                        pesoTotal = entity.PesoTotal,
+                        precioTotal
+                    });
+                    await _auditoriaService.RegistrarAsync("StockProducto", entity.Id.ToString(), "CrearLote", detalle, lotesProductosDTO.IdUsuario);
+                }
+                catch { /* fire-and-forget */ }
+
+                var movimiento = new MovimientosProductosEntity
+                {
+                    IdLoteProducto = entity.Id,
+                    TipoMovimiento = (int)TipoMovimientoProducto.Entrada,
+                    FechaMovimiento = DateTime.Now,
+                    Cantidad = lotesProductosDTO.PesoTotal,
+                    TotalMovimiento = precioTotal,
+                    IdUnidadMedida = lotesProductosDTO.IdUnidadMedida,
+                    IdUsuario = lotesProductosDTO.IdUsuario,
+                    Observacion = $"Ingreso de lote - {lotesProductosDTO.CantidadUnidades} unidades, {lotesProductosDTO.PesoTotal} kg",
+                    Estado = 1
+                };
+                await _movimientosProductosRepository.CreateAsync(movimiento);
+
+                if (ownTransaction)
+                    await _unitOfWork!.CommitAsync();
+            }
+            catch
             {
-                IdLoteProducto = entity.Id,
-                TipoMovimiento = (int)TipoMovimientoProducto.Entrada,
-                FechaMovimiento = DateTime.Now,
-                Cantidad = lotesProductosDTO.PesoTotal,
-                TotalMovimiento = precioTotal,
-                IdUnidadMedida = lotesProductosDTO.IdUnidadMedida,
-                IdUsuario = lotesProductosDTO.IdUsuario,
-                Observacion = $"Ingreso de lote - {lotesProductosDTO.CantidadUnidades} unidades, {lotesProductosDTO.PesoTotal} kg",
-                Estado = 1
-            };
-            await _movimientosProductosRepository.CreateAsync(movimiento);
+                if (ownTransaction)
+                    await _unitOfWork!.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                if (ownTransaction)
+                    await _unitOfWork!.DisposeAsync();
+            }
         }
 
         public async Task<List<LotesProductosResponseDTO>> ObtenerLotesProductosAsync()
@@ -127,7 +150,14 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         public async Task ActualizarEstadoLoteProducto(ActualizarEstadoTipoIntDTO actualizarEstadoDTO)
         {
             var lote = await _lotesProductosRepository.FindByIdAsync(actualizarEstadoDTO.Id);
-            if (lote != null)
+            if (lote == null)
+                throw new Exception("El lote de producto no existe");
+
+            bool ownTransaction = _unitOfWork != null && !_unitOfWork.HasActiveTransaction;
+            if (ownTransaction)
+                await _unitOfWork!.BeginTransactionAsync();
+
+            try
             {
                 var estadoAnterior = lote.Estado;
                 lote.Estado = actualizarEstadoDTO.EstadoNuevo;
@@ -160,10 +190,20 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     };
                     await _movimientosProductosRepository.CreateAsync(movimiento);
                 }
+
+                if (ownTransaction)
+                    await _unitOfWork!.CommitAsync();
             }
-            else
+            catch
             {
-                throw new Exception("El lote de producto no existe");
+                if (ownTransaction)
+                    await _unitOfWork!.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                if (ownTransaction)
+                    await _unitOfWork!.DisposeAsync();
             }
         }
 
@@ -177,8 +217,15 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 throw new ValidationException(validationResult.Errors);
             }
 
-            var lote = await _lotesProductosRepository.FindByIdAsync(id);
-            if (lote != null)
+var lote = await _lotesProductosRepository.FindByIdAsync(id);
+            if (lote == null)
+                throw new Exception("El lote de producto no existe");
+
+            bool ownTransaction = _unitOfWork != null && !_unitOfWork.HasActiveTransaction;
+            if (ownTransaction)
+                await _unitOfWork!.BeginTransactionAsync();
+
+            try
             {
                 var diferenciaCantidad = lotesProductosDTO.CantidadUnidades - lote.CantidadUnidades;
                 var diferenciaPeso = lotesProductosDTO.PesoTotal - lote.PesoTotal;
@@ -220,6 +267,20 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     await _auditoriaService.RegistrarAsync("StockProducto", id.ToString(), "Modificar", detalle, lotesProductosDTO.IdUsuario);
                 }
                 catch { /* fire-and-forget */ }
+
+                if (ownTransaction)
+                    await _unitOfWork!.CommitAsync();
+            }
+            catch
+            {
+                if (ownTransaction)
+                    await _unitOfWork!.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                if (ownTransaction)
+                    await _unitOfWork!.DisposeAsync();
             }
         }
 
@@ -232,7 +293,14 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
         public async Task EliminarLoteProductoAsync(int idLote, Guid idUsuario)
         {
             var existente = await _lotesProductosRepository.FindByIdAsync(idLote);
-            if (existente != null)
+            if (existente == null)
+                throw new Exception("El lote de producto no existe");
+
+            bool ownTransaction = _unitOfWork != null && !_unitOfWork.HasActiveTransaction;
+            if (ownTransaction)
+                await _unitOfWork!.BeginTransactionAsync();
+
+            try
             {
                 var movimiento = new MovimientosProductosEntity
                 {
@@ -259,10 +327,20 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     await _auditoriaService.RegistrarAsync("StockProducto", idLote.ToString(), "Eliminar", detalle, idUsuario);
                 }
                 catch { /* fire-and-forget */ }
+
+                if (ownTransaction)
+                    await _unitOfWork!.CommitAsync();
             }
-            else
+            catch
             {
-                throw new Exception("El lote de producto no existe");
+                if (ownTransaction)
+                    await _unitOfWork!.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                if (ownTransaction)
+                    await _unitOfWork!.DisposeAsync();
             }
         }
 

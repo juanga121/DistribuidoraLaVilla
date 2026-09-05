@@ -4,6 +4,7 @@ using DistribuidoraLaVilla.Domain.DTOS.Caja;
 using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Facturacion;
+using DistribuidoraLaVilla.Domain.Enums;
 using DistribuidoraLaVilla.Domain.Interfaces;
 
 namespace DistribuidoraLaVilla.Application.Services.CxC
@@ -78,6 +79,8 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
                 IdCliente = cliente.IdCliente.ToString(),
                 ClienteNombre = cliente.Nombre ?? string.Empty,
                 ClienteDocumento = cliente.Documento ?? string.Empty,
+                TipoPersona = cliente.TipoPersona,
+                TipoPersonaDescripcion = cliente.TipoPersona == (int)TipoPersona.Juridica ? "Jurídica" : "Natural",
                 LimiteCredito = limiteCredito,
                 CreditoDisponible = creditoDisponible,
                 FacturasPendientes = facturasPendientes,
@@ -188,9 +191,10 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
                 };
                 await _reciboRepo.CreateAsync(recibo);
 
-                await _unitOfWork.CommitAsync();
-
-                await _cajaService.RegistrarIngresoPagoCxcAsync(
+                // Ingreso de caja dentro de la MISMA transacción (CA09/CA10): si no hay
+                // caja abierta lanza error y se revierte todo (pago, saldo CxC, recibo),
+                // en lugar de descartar el ingreso en silencio después del commit.
+                await _cajaService.RegistrarIngresoPagoCxcTransaccionalAsync(
                     pago.Id,
                     recibo.Id,
                     dto.MontoPago,
@@ -198,6 +202,8 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
                     recibo.NumeroRecibo,
                     recibo.NumeroFactura,
                     dto.MetodoPago);
+
+                await _unitOfWork.CommitAsync();
 
                 return new PagoResponseDTO
                 {

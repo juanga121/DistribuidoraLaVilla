@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using DistribuidoraLaVilla.Domain.Enums;
 
 namespace DistribuidoraLaVilla.Domain.Entities.Compras
 {
@@ -34,6 +35,9 @@ namespace DistribuidoraLaVilla.Domain.Entities.Compras
 
         [Column("id_marca")]
         public int IdMarca { get; set; }
+
+        [Column("forma_pago")]
+        public int FormaPago { get; set; } = (int)DistribuidoraLaVilla.Domain.Enums.FormaPago.Credito;
 
         [Column("monto_total", TypeName = "decimal(18,2)")]
         public decimal MontoTotal { get; set; }

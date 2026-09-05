@@ -4,6 +4,7 @@ using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Facturacion;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
 using DistribuidoraLaVilla.Domain.Entities.Compras;
+using DistribuidoraLaVilla.Domain.Enums;
 
 namespace DistribuidoraLaVilla.Infrastructure.Data
 {
@@ -50,6 +51,8 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
 
         public DbSet<CuentasPagarEntity> CuentasPagar { get; set; }
 
+        public DbSet<PagoCxPEntity> PagosCxp { get; set; }
+
         public DbSet<MovimientosFinancierosEntity> MovimientosFinancieros { get; set; }
 
         public DbSet<EstadoEntity> Estados { get; set; }
@@ -58,7 +61,7 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<CuentasPagarEntity>(entity =>
+modelBuilder.Entity<CuentasPagarEntity>(entity =>
             {
                 entity.HasIndex(e => new { e.Estado, e.SaldoPendiente })
                     .HasDatabaseName("IX_cuentas_pagar_estado_saldo");
@@ -67,11 +70,39 @@ namespace DistribuidoraLaVilla.Infrastructure.Data
                     .HasDatabaseName("IX_cuentas_pagar_proveedor");
             });
 
-            modelBuilder.Entity<RecepcionCompraEntity>(entity =>
+            modelBuilder.Entity<PagoCxPEntity>(entity =>
+            {
+                entity.HasIndex(e => e.IdCuentaPagar)
+                    .HasDatabaseName("IX_pagos_cxp_cuenta_pagar");
+
+                entity.HasOne<CuentasPagarEntity>()
+                    .WithMany()
+                    .HasForeignKey(e => e.IdCuentaPagar)
+                    .HasConstraintName("FK_pagos_cxp_cuentas_pagar");
+            });
+
+modelBuilder.Entity<RecepcionCompraEntity>(entity =>
             {
                 entity.HasIndex(e => e.IdOrdenCompra)
                     .IsUnique()
                     .HasDatabaseName("IX_recepciones_compra_orden");
+
+                entity.Property(e => e.FormaPago)
+                    .HasDefaultValue((int)FormaPago.Credito);
+            });
+
+            modelBuilder.Entity<ClientesEntity>(entity =>
+            {
+                entity.Property(e => e.TipoPersona)
+                    .HasDefaultValue((int)TipoPersona.Natural);
+            });
+
+            modelBuilder.Entity<LotesProductosEntity>(entity =>
+            {
+                entity.HasOne<RecepcionCompraEntity>()
+                    .WithMany()
+                    .HasForeignKey(e => e.IdRecepcionCompra)
+                    .HasConstraintName("FK_lotes_productos_recepciones_compra");
             });
         }
     }

@@ -117,6 +117,31 @@ namespace DistribuidoraLaVilla.Api.Controllers
         }
 
         /// <summary>
+        /// Retorna el comprobante de recepción de compra de una orden (CA06),
+        /// para imprimir en térmica o convencional.
+        /// </summary>
+        [HttpGet("ObtenerComprobante/{idOrdenCompra}")]
+        public async Task<ActionResult<ComprobanteCompraDTO>> ObtenerComprobante(int idOrdenCompra)
+        {
+            try
+            {
+                var resultado = await _service.ObtenerComprobanteRecepcionAsync(idOrdenCompra);
+                if (resultado == null)
+                    return NotFound(new { mensaje = $"No se encontró el comprobante para la orden con ID {idOrdenCompra}" });
+
+                return Ok(resultado);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = $"Error al obtener el comprobante: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
         /// Actualiza el estado de una orden de compra.
         /// </summary>
         [HttpPut("CambiarEstado")]

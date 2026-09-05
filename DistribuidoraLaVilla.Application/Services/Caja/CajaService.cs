@@ -177,53 +177,12 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
 
         public async Task<CajaMovimientoDTO> RegistrarEgresoAsync(RegistrarEgresoDTO dto)
         {
-            if (dto.Monto <= 0)
-                throw new InvalidOperationException("El monto del egreso debe ser mayor a cero");
-
-            if (string.IsNullOrWhiteSpace(dto.Concepto))
-                throw new InvalidOperationException("El concepto del egreso es obligatorio");
-
-            var caja = await GetCajaAbiertaAsync();
-            if (caja == null)
-                throw new InvalidOperationException("No hay una caja abierta");
-
             await _unitOfWork.BeginTransactionAsync();
             try
             {
-                var movimiento = new CajaMovimientoEntity
-                {
-                    IdApertura = caja.Id,
-                    TipoMovimiento = (int)TipoMovimientoCajaEnum.Egreso,
-                    Concepto = dto.Concepto.Trim(),
-                    Monto = dto.Monto,
-                    Fecha = DateTime.Now,
-                    IdUsuario = dto.IdUsuario,
-                    MetodoPago = dto.MetodoPago
-                };
-
-                await _movimientoRepo.CreateAsync(movimiento);
+                var movimiento = await RegistrarEgresoTransaccionalAsync(dto);
                 await _unitOfWork.CommitAsync();
-
-                await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
-                {
-                    TipoMovimiento = "Caja",
-                    SubTipo = "Egreso",
-                    Descripcion = $"Egreso de caja: {movimiento.Concepto}",
-                    Monto = movimiento.Monto,
-                    Direccion = "Egreso",
-                    OrigenModulo = "Caja",
-                    ReferenciaId = movimiento.Id,
-                    FechaMovimiento = DateTime.Now,
-                    Estado = 1
-                }, dto.IdUsuario);
-
-                await RegistrarAuditoriaAsync("Caja", movimiento.Id.ToString(), "RegistrarEgreso", new
-                {
-                    concepto = movimiento.Concepto,
-                    monto = movimiento.Monto
-                }, dto.IdUsuario);
-
-                return await MapMovimientoAsync(movimiento);
+                return movimiento;
             }
             catch
             {
@@ -232,14 +191,78 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             }
         }
 
-        public async Task<CajaMovimientoDTO?> RegistrarIngresoFacturaContadoAsync(int idFactura, decimal monto, Guid idUsuario, string? numeroFactura = null, int? metodoPago = null)
+        /// <summary>
+        /// Registra el egreso de caja SIN iniciar transacción propia: se apoya en la
+        /// transacción ambiente que abrió el servicio llamador (CuentasPagarService,
+        /// OrdenCompraService), de modo que el egreso, el movimiento financiero y la
+        /// auditoría forman parte de la misma unidad atómica. Escribe auditoría igual
+        /// que <see cref="RegistrarEgresoAsync"/>. Requiere caja abierta.
+        /// </summary>
+        public async Task<CajaMovimientoDTO> RegistrarEgresoTransaccionalAsync(RegistrarEgresoDTO dto)
+        {
+            if (dto.Monto <= 0)
+                throw new InvalidOperationException("El monto del egreso debe ser mayor a cero");
+
+            if (string.IsNullOrWhiteSpace(dto.Concepto))
+                throw new InvalidOperationException("El concepto del egreso es obligatorio");
+
+            var caja = await GetCajaAbiertaAsync();
+            if (caja == null)
+                throw new InvalidOperationException("No hay una caja abierta: no se puede registrar el egreso sin una caja abierta");
+
+            var movimiento = new CajaMovimientoEntity
+            {
+                IdApertura = caja.Id,
+                TipoMovimiento = (int)TipoMovimientoCajaEnum.Egreso,
+                Concepto = dto.Concepto.Trim(),
+                Monto = dto.Monto,
+                Fecha = DateTime.Now,
+                IdUsuario = dto.IdUsuario,
+                MetodoPago = dto.MetodoPago
+            };
+
+            await _movimientoRepo.CreateAsync(movimiento);
+
+            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            {
+                TipoMovimiento = "Caja",
+                SubTipo = "Egreso",
+                Descripcion = $"Egreso de caja: {movimiento.Concepto}",
+                Monto = movimiento.Monto,
+                Direccion = "Egreso",
+                OrigenModulo = "Caja",
+                ReferenciaId = movimiento.Id,
+                FechaMovimiento = DateTime.Now,
+                Estado = 1
+            }, dto.IdUsuario);
+
+            await RegistrarAuditoriaAsync("Caja", movimiento.Id.ToString(), "RegistrarEgreso", new
+            {
+                concepto = movimiento.Concepto,
+                monto = movimiento.Monto
+            }, dto.IdUsuario);
+
+            return await MapMovimientoAsync(movimiento);
+        }
+
+        /// <summary>
+        /// Registra el ingreso de caja de una venta de contado SIN iniciar transacción propia:
+        /// se apoya en la transacción ambiente que abrió el servicio llamador (FacturaService),
+        /// de modo que la factura, el consumo de stock y el ingreso forman parte de la misma
+        /// unidad atómica (CA10). Si no hay caja abierta, bloquea la operación con un error
+        /// en lugar de descartar el ingreso en silencio (política definida en F1).
+        /// </summary>
+        public async Task<CajaMovimientoDTO?> RegistrarIngresoFacturaContadoTransaccionalAsync(int idFactura, decimal monto, Guid idUsuario, string? numeroFactura = null, int? metodoPago = null)
         {
             if (monto <= 0)
                 return null;
 
             var caja = await GetCajaAbiertaAsync();
             if (caja == null)
-                return null;
+            {
+                throw new InvalidOperationException(
+                    "No hay una caja abierta: para registrar una venta de contado debe existir una caja abierta. Abra la caja o registre la venta a crédito");
+            }
 
             var concepto = string.IsNullOrWhiteSpace(numeroFactura)
                 ? $"Venta contado - Factura {idFactura:D6}"
@@ -268,14 +291,25 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
             return await MapMovimientoAsync(movimiento);
         }
 
-        public async Task<CajaMovimientoDTO?> RegistrarIngresoPagoCxcAsync(int idPago, int? idRecibo, decimal monto, Guid idUsuario, string? numeroRecibo = null, string? numeroFactura = null, int? metodoPago = null)
+        /// <summary>
+        /// Registra el ingreso de caja de un pago de cliente (CxC) SIN iniciar transacción propia:
+        /// se apoya en la transacción ambiente que abrió el servicio llamador (CuentasCobrarService),
+        /// de modo que el pago, la actualización de la cuenta, el recibo y el ingreso forman parte de
+        /// la misma unidad atómica (CA10). Si no hay caja abierta, bloquea la operación con un error
+        /// en lugar de descartar el ingreso en silencio (CA09). Escribe auditoría igual que
+        /// <see cref="RegistrarIngresoPagoCxcAsync"/>.
+        /// </summary>
+        public async Task<CajaMovimientoDTO?> RegistrarIngresoPagoCxcTransaccionalAsync(int idPago, int? idRecibo, decimal monto, Guid idUsuario, string? numeroRecibo = null, string? numeroFactura = null, int? metodoPago = null)
         {
             if (monto <= 0)
                 return null;
 
             var caja = await GetCajaAbiertaAsync();
             if (caja == null)
-                return null;
+            {
+                throw new InvalidOperationException(
+                    "No hay una caja abierta: para registrar un pago de cliente debe existir una caja abierta. Abra la caja o registre el pago más tarde");
+            }
 
             var pago = await _pagoRepo.FindByIdAsync(idPago);
             var recibo = idRecibo.HasValue ? await _reciboRepo.FindByIdAsync(idRecibo.Value) : null;
@@ -311,6 +345,22 @@ namespace DistribuidoraLaVilla.Application.Services.Caja
                 metodoPago
             }, idUsuario);
             return await MapMovimientoAsync(movimiento);
+        }
+
+        public async Task<CajaMovimientoDTO?> RegistrarIngresoPagoCxcAsync(int idPago, int? idRecibo, decimal monto, Guid idUsuario, string? numeroRecibo = null, string? numeroFactura = null, int? metodoPago = null)
+        {
+            await _unitOfWork.BeginTransactionAsync();
+            try
+            {
+                var movimiento = await RegistrarIngresoPagoCxcTransaccionalAsync(idPago, idRecibo, monto, idUsuario, numeroRecibo, numeroFactura, metodoPago);
+                await _unitOfWork.CommitAsync();
+                return movimiento;
+            }
+            catch
+            {
+                await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<List<CajaMovimientoDTO>> ObtenerMovimientosAsync(DateTime? desde, DateTime? hasta, int? tipoMovimiento = null)

@@ -3,6 +3,7 @@ using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
 using DistribuidoraLaVilla.Domain.Entities;
+using DistribuidoraLaVilla.Domain.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,6 +31,7 @@ namespace DistribuidoraLaVilla.Application.Services
                 Email = clientesDTO.Email,
                 LimiteCredito = clientesDTO.LimiteCredito,
                 DiasCredito = clientesDTO.DiasCredito,
+                TipoPersona = clientesDTO.TipoPersona ?? (int)TipoPersona.Natural,
                 Estado = 1,
                 FechaCreacion = DateTime.Now,
                 FechaActualizacion = DateTime.Now
@@ -99,6 +101,7 @@ namespace DistribuidoraLaVilla.Application.Services
                 cliente.Email = clientesDTO.Email;
                 cliente.LimiteCredito = clientesDTO.LimiteCredito;
                 cliente.DiasCredito = clientesDTO.DiasCredito;
+                cliente.TipoPersona = clientesDTO.TipoPersona ?? (int)TipoPersona.Natural;
                 cliente.FechaActualizacion = DateTime.Now;
                 await _clientesRepository.UpdateAsync(cliente);
 

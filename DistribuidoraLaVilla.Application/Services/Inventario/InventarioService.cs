@@ -149,28 +149,46 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             bool esVentaPorPeso,
             decimal? pesoPorUnidad = null)
         {
-            var producto = await _productosRepository.FindByIdAsync(idProducto)
-                ?? throw new InvalidOperationException(
-                    $"No se encontró el producto con ID {idProducto}");
+            bool ownTransaction = !_unitOfWork.HasActiveTransaction;
 
-            var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
+            if (ownTransaction)
+                await _unitOfWork.BeginTransactionAsync();
 
-            var lotesDisponibles = _lotesProductosRepository.GetByFilter(l =>
-                l.IdProducto == idProducto &&
-                l.Estado == 1 &&
-                l.CantidadDisponible > 0
-            ).OrderBy(l => l.FechaVencimiento).ToList();
-
-            if (pesoPorUnidad.HasValue)
+            try
             {
-                if (esVentaPorPeso)
+                var producto = await _productosRepository.FindByIdAsync(idProducto)
+                    ?? throw new InvalidOperationException(
+                        $"No se encontró el producto con ID {idProducto}");
+
+                var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
+
+                var lotesDisponibles = _lotesProductosRepository.GetByFilter(l =>
+                    l.IdProducto == idProducto &&
+                    l.Estado == 1 &&
+                    l.CantidadDisponible > 0
+                ).OrderBy(l => l.FechaVencimiento).ToList();
+
+                if (pesoPorUnidad.HasValue)
                 {
-                    var pesoTotal = lotesDisponibles.Sum(l => l.PesoDisponible);
-                    if (pesoTotal < cantidadRequerida)
+                    if (esVentaPorPeso)
                     {
-                        throw new InvalidOperationException(
-                            $"Stock insuficiente de '{producto.Nombre}'. " +
-                            $"Requerido: {cantidadRequerida} kg, Disponible: {pesoTotal} kg");
+                        var pesoTotal = lotesDisponibles.Sum(l => l.PesoDisponible);
+                        if (pesoTotal < cantidadRequerida)
+                        {
+                            throw new InvalidOperationException(
+                                $"Stock insuficiente de '{producto.Nombre}'. " +
+                                $"Requerido: {cantidadRequerida} kg, Disponible: {pesoTotal} kg");
+                        }
+                    }
+                    else
+                    {
+                        var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
+                        if (stockTotal < cantidadRequerida)
+                        {
+                            throw new InvalidOperationException(
+                                $"Stock insuficiente de '{producto.Nombre}'. " +
+                                $"Requerido: {cantidadRequerida} unidades, Disponible: {stockTotal} unidades");
+                        }
                     }
                 }
                 else
@@ -180,108 +198,112 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                     {
                         throw new InvalidOperationException(
                             $"Stock insuficiente de '{producto.Nombre}'. " +
-                            $"Requerido: {cantidadRequerida} unidades, Disponible: {stockTotal} unidades");
+                            $"Requerido: {cantidadRequerida}, Disponible: {stockTotal}");
                     }
                 }
+
+                var consumos = new List<ConsumoProductoDTO>();
+                decimal cantidadPendiente = cantidadRequerida;
+
+                foreach (var lote in lotesDisponibles)
+                {
+                    if (cantidadPendiente <= 0) break;
+
+                    decimal cantidadAConsumir;
+                    decimal unidadesAConsumir = 0;
+                    decimal pesoAConsumir = 0;
+                    decimal pesoPorUnidadLote = lote.CantidadDisponible > 0
+                        ? lote.PesoDisponible / lote.CantidadDisponible
+                        : 0m;
+
+                    if (pesoPorUnidad.HasValue && pesoPorUnidadLote <= 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"El lote {lote.Id} del producto '{producto.Nombre}' tiene una relación peso/unidad inválida");
+                    }
+
+                    if (pesoPorUnidad.HasValue && esVentaPorPeso)
+                    {
+                        cantidadAConsumir = Math.Min(lote.PesoDisponible, cantidadPendiente);
+                        unidadesAConsumir = cantidadAConsumir / pesoPorUnidadLote;
+                        pesoAConsumir = cantidadAConsumir;
+
+                        lote.PesoDisponible -= pesoAConsumir;
+                        lote.CantidadDisponible -= unidadesAConsumir;
+                    }
+                    else if (pesoPorUnidad.HasValue && !esVentaPorPeso)
+                    {
+                        cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
+                        unidadesAConsumir = cantidadAConsumir;
+                        pesoAConsumir = cantidadAConsumir * pesoPorUnidadLote;
+
+                        lote.CantidadDisponible -= unidadesAConsumir;
+                        lote.PesoDisponible -= pesoAConsumir;
+                    }
+                    else
+                    {
+                        cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
+                        lote.CantidadDisponible -= cantidadAConsumir;
+                    }
+
+                    await _lotesProductosRepository.UpdateAsync(lote);
+
+                    var costBasis = esVentaPorPeso
+                        ? lote.PrecioKilo
+                        : lote.PrecioUnitario;
+
+                    if (esVentaPorPeso && lote.PrecioKilo <= 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"El lote del producto '{producto.Nombre}' tiene PrecioKilo inválido ({lote.PrecioKilo}) para una venta por peso");
+                    }
+
+                    var movimiento = new MovimientoEntity
+                    {
+                        IdLoteProducto = lote.Id,
+                        TipoMovimiento = (int)TipoMovimientoProducto.Venta,
+                        FechaMovimiento = DateTime.Now,
+                        Cantidad = cantidadAConsumir,
+                        TotalMovimiento = cantidadAConsumir * costBasis,
+                        IdUnidadMedida = idUnidadMedida,
+                        IdEntidad = idCliente == Guid.Empty ? null : idCliente,
+                        IdUsuario = idUsuario,
+                        Observacion = observacion,
+                        Estado = 1
+                    };
+
+                    await _movimientosRepository.CreateAsync(movimiento);
+
+                    consumos.Add(new ConsumoProductoDTO
+                    {
+                        IdProducto = idProducto,
+                        NombreProducto = producto.Nombre,
+                        CantidadRequerida = cantidadRequerida,
+                        CantidadConsumida = cantidadAConsumir,
+                        UnidadMedida = unidadMedida?.Abreviatura,
+                        IdMovimiento = movimiento.Id,
+                        IdLote = lote.Id
+                    });
+
+                    cantidadPendiente -= cantidadAConsumir;
+                }
+
+                if (ownTransaction)
+                    await _unitOfWork.CommitAsync();
+
+                return consumos;
             }
-            else
+            catch
             {
-                var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
-                if (stockTotal < cantidadRequerida)
-                {
-                    throw new InvalidOperationException(
-                        $"Stock insuficiente de '{producto.Nombre}'. " +
-                        $"Requerido: {cantidadRequerida}, Disponible: {stockTotal}");
-                }
+                if (ownTransaction)
+                    await _unitOfWork.RollbackAsync();
+                throw;
             }
-
-            var consumos = new List<ConsumoProductoDTO>();
-            decimal cantidadPendiente = cantidadRequerida;
-
-            foreach (var lote in lotesDisponibles)
+            finally
             {
-                if (cantidadPendiente <= 0) break;
-
-                decimal cantidadAConsumir;
-                decimal unidadesAConsumir = 0;
-                decimal pesoAConsumir = 0;
-                decimal pesoPorUnidadLote = lote.CantidadDisponible > 0
-                    ? lote.PesoDisponible / lote.CantidadDisponible
-                    : 0m;
-
-                if (pesoPorUnidad.HasValue && pesoPorUnidadLote <= 0)
-                {
-                    throw new InvalidOperationException(
-                        $"El lote {lote.Id} del producto '{producto.Nombre}' tiene una relación peso/unidad inválida");
-                }
-
-                if (pesoPorUnidad.HasValue && esVentaPorPeso)
-                {
-                    cantidadAConsumir = Math.Min(lote.PesoDisponible, cantidadPendiente);
-                    unidadesAConsumir = cantidadAConsumir / pesoPorUnidadLote;
-                    pesoAConsumir = cantidadAConsumir;
-
-                    lote.PesoDisponible -= pesoAConsumir;
-                    lote.CantidadDisponible -= unidadesAConsumir;
-                }
-                else if (pesoPorUnidad.HasValue && !esVentaPorPeso)
-                {
-                    cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
-                    unidadesAConsumir = cantidadAConsumir;
-                    pesoAConsumir = cantidadAConsumir * pesoPorUnidadLote;
-
-                    lote.CantidadDisponible -= unidadesAConsumir;
-                    lote.PesoDisponible -= pesoAConsumir;
-                }
-                else
-                {
-                    cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
-                    lote.CantidadDisponible -= cantidadAConsumir;
-                }
-
-                await _lotesProductosRepository.UpdateAsync(lote);
-
-                var costBasis = esVentaPorPeso
-                    ? lote.PrecioKilo
-                    : lote.PrecioUnitario;
-
-                if (esVentaPorPeso && lote.PrecioKilo <= 0)
-                {
-                    throw new InvalidOperationException(
-                        $"El lote del producto '{producto.Nombre}' tiene PrecioKilo inválido ({lote.PrecioKilo}) para una venta por peso");
-                }
-
-                var movimiento = new MovimientoEntity
-                {
-                    IdLoteProducto = lote.Id,
-                    TipoMovimiento = (int)TipoMovimientoProducto.Venta,
-                    FechaMovimiento = DateTime.Now,
-                    Cantidad = cantidadAConsumir,
-                    TotalMovimiento = cantidadAConsumir * costBasis,
-                    IdUnidadMedida = idUnidadMedida,
-                    IdEntidad = idCliente == Guid.Empty ? null : idCliente,
-                    IdUsuario = idUsuario,
-                    Observacion = observacion,
-                    Estado = 1
-                };
-
-                await _movimientosRepository.CreateAsync(movimiento);
-
-                consumos.Add(new ConsumoProductoDTO
-                {
-                    IdProducto = idProducto,
-                    NombreProducto = producto.Nombre,
-                    CantidadRequerida = cantidadRequerida,
-                    CantidadConsumida = cantidadAConsumir,
-                    UnidadMedida = unidadMedida?.Abreviatura,
-                    IdMovimiento = movimiento.Id,
-                    IdLote = lote.Id
-                });
-
-                cantidadPendiente -= cantidadAConsumir;
+                if (ownTransaction)
+                    await _unitOfWork.DisposeAsync();
             }
-
-            return consumos;
         }
     }
 }

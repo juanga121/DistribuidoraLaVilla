@@ -4,6 +4,7 @@ using DistribuidoraLaVilla.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace DistribuidoraLaVilla.Infrastructure.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20260904221530_AddFormaPagoRecepcionCompra")]
+    partial class AddFormaPagoRecepcionCompra
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -355,12 +358,6 @@ namespace DistribuidoraLaVilla.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)")
                         .HasColumnName("telefono");
-
-                    b.Property<int>("TipoPersona")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1)
-                        .HasColumnName("tipo_persona");
 
                     b.HasKey("IdCliente");
 
@@ -1165,52 +1162,6 @@ namespace DistribuidoraLaVilla.Infrastructure.Migrations
                     b.ToTable("movimientos_materia_prima");
                 });
 
-            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.PagoCxPEntity", b =>
-                {
-                    b.Property<int>("IdPago")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("id_pago");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("IdPago"));
-
-                    b.Property<DateTime>("FechaCreacion")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_creacion");
-
-                    b.Property<DateTime>("FechaPago")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("fecha_pago");
-
-                    b.Property<int>("IdCuentaPagar")
-                        .HasColumnType("int")
-                        .HasColumnName("id_cuenta_pagar");
-
-                    b.Property<Guid?>("IdUsuario")
-                        .HasColumnType("uniqueidentifier")
-                        .HasColumnName("id_usuario");
-
-                    b.Property<int?>("MetodoPago")
-                        .HasColumnType("int")
-                        .HasColumnName("metodo_pago");
-
-                    b.Property<decimal>("Monto")
-                        .HasColumnType("decimal(18,2)")
-                        .HasColumnName("monto");
-
-                    b.Property<string>("Observacion")
-                        .HasMaxLength(255)
-                        .HasColumnType("nvarchar(255)")
-                        .HasColumnName("observacion");
-
-                    b.HasKey("IdPago");
-
-                    b.HasIndex("IdCuentaPagar")
-                        .HasDatabaseName("IX_pagos_cxp_cuenta_pagar");
-
-                    b.ToTable("pagos_cxp");
-                });
-
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.PasivosEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -1743,16 +1694,6 @@ namespace DistribuidoraLaVilla.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("usuarios");
-                });
-
-            modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.PagoCxPEntity", b =>
-                {
-                    b.HasOne("DistribuidoraLaVilla.Domain.Entities.CuentasPagarEntity", null)
-                        .WithMany()
-                        .HasForeignKey("IdCuentaPagar")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("FK_pagos_cxp_cuentas_pagar");
                 });
 
             modelBuilder.Entity("DistribuidoraLaVilla.Domain.Entities.Productos.LotesProductosEntity", b =>

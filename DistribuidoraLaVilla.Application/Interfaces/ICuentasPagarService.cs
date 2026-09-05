@@ -10,5 +10,6 @@ namespace DistribuidoraLaVilla.Application.Interfaces
         Task<CuentasPagarDTO> ActualizarAsync(int id, CrearCxPDTO dto, Guid idUsuario);
         Task EliminarAsync(int id);
         Task<CuentasPagarDTO> RegistrarPagoAsync(int id, RegistrarPagoCxPDTO dto, Guid idUsuario);
+        Task<List<PagoCxPDTO>> ObtenerPagosAsync(int idCuentaPagar);
     }
 }

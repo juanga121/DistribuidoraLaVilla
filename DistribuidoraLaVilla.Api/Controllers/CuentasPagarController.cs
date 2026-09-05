@@ -56,6 +56,21 @@ namespace DistribuidoraLaVilla.Api.Controllers
             }
         }
 
+        [HttpGet]
+        [Route("ObtenerPagos/{id:int}")]
+        public async Task<IActionResult> ObtenerPagos(int id)
+        {
+            try
+            {
+                var result = await _cuentasPagarService.ObtenerPagosAsync(id);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return NotFound(new { success = false, message = ex.Message });
+            }
+        }
+
         [HttpPut]
         [Route("Actualizar/{id:int}")]
         public async Task<IActionResult> Actualizar(int id, [FromBody] CrearCxPDTO dto)

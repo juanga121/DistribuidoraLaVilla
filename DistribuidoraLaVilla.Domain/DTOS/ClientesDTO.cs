@@ -32,5 +32,8 @@ namespace DistribuidoraLaVilla.Domain.DTOS
 
         [Range(0, 365, ErrorMessage = "Los días de crédito deben estar entre 0 y 365")]
         public int? DiasCredito { get; set; }
+
+        [Range(1, 2, ErrorMessage = "El tipo de persona debe ser 1 (Natural) o 2 (Jurídica)")]
+        public int? TipoPersona { get; set; }
     }
 }

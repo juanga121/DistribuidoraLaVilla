@@ -387,25 +387,28 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         producto.PesoPorUnidad
                     );
 
-                    decimal cantidadTotalConsumida = consumos.Sum(c => c.CantidadConsumida);
-                    decimal subtotal = cantidadTotalConsumida * detalle.Precio;
-                    int? idLote = consumos.FirstOrDefault()?.IdLote;
-
-                    detallesEntidad.Add(new DetalleFacturaEntity
+                    // A FIFO sale can consume stock from multiple lots. Persist one
+                    // DetalleFactura row per lot (each with its own IdLote, quantity and
+                    // subtotal) so the invoice detail reflects the actual lot breakdown.
+                    // The invoice total is the sum of the per-lot subtotals, unchanged.
+                    foreach (var consumo in consumos)
                     {
-                        IdProducto = detalle.IdProducto,
-                        IdLote = idLote,
-                        Cantidad = cantidadTotalConsumida,
-                        IdUnidadMedida = detalle.IdUnidadMedida,
-                        Precio = detalle.Precio,
-                        Subtotal = subtotal,
-                        EsVentaPorPeso = esVentaPorPeso,
-                        PesoTotal = esVentaPorPeso ? cantidadTotalConsumida : null,
-                        PrecioKilo = esVentaPorPeso ? detalle.Precio : null,
-                        PrecioOriginal = esVentaPorPeso ? producto.PrecioPorKilo : (decimal?)producto.PrecioUnitario
-                    });
+                        detallesEntidad.Add(new DetalleFacturaEntity
+                        {
+                            IdProducto = detalle.IdProducto,
+                            IdLote = consumo.IdLote,
+                            Cantidad = consumo.CantidadConsumida,
+                            IdUnidadMedida = detalle.IdUnidadMedida,
+                            Precio = detalle.Precio,
+                            Subtotal = consumo.CantidadConsumida * detalle.Precio,
+                            EsVentaPorPeso = esVentaPorPeso,
+                            PesoTotal = esVentaPorPeso ? consumo.CantidadConsumida : null,
+                            PrecioKilo = esVentaPorPeso ? detalle.Precio : null,
+                            PrecioOriginal = esVentaPorPeso ? producto.PrecioPorKilo : (decimal?)producto.PrecioUnitario
+                        });
 
-                    totalFactura += subtotal;
+                        totalFactura += consumo.CantidadConsumida * detalle.Precio;
+                    }
                 }
 
                 var factura = new FacturaEntity
@@ -444,12 +447,15 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                     await _cxcRepository.CreateAsync(cxc);
                 }
 
-                await _unitOfWork.CommitAsync();
-
                 if (tipoFactura == TipoFacturaEnum.Contado)
                 {
-                    await _cajaService.RegistrarIngresoFacturaContadoAsync(factura.Id, totalFactura, idUsuario, $"F{factura.Id:D6}", metodoPago);
+                    // Caja ingreso INSIDE the same transaction as the invoice: if there is no
+                    // open cash register the sale is blocked and everything rolls back (CA10),
+                    // instead of silently dropping the income after commit.
+                    await _cajaService.RegistrarIngresoFacturaContadoTransaccionalAsync(factura.Id, totalFactura, idUsuario, $"F{factura.Id:D6}", metodoPago);
                 }
+
+                await _unitOfWork.CommitAsync();
 
                 try
                 {
