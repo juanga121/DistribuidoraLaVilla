@@ -258,7 +258,8 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
                     FechaVencimiento = fechaVencimiento,
                     MontoTotal = cxc.MontoTotal ?? 0,
                     SaldoPendiente = cxc.SaldoPendiente ?? 0,
-                    Estado = cxc.Estado == 2 ? "Pagada" : "Pendiente",
+                    MontoPagado = (cxc.MontoTotal ?? 0) - (cxc.SaldoPendiente ?? 0),
+                    Estado = CalcularEstadoEfectivo(cxc),
                     DiasVencidos = diasVencidos
                 });
             }
@@ -278,6 +279,24 @@ namespace DistribuidoraLaVilla.Application.Services.CxC
                 Referencia = pago.Referencia,
                 Observacion = pago.Observacion
             };
+        }
+
+        /// <summary>
+        /// Deriva el estado efectivo de una cuenta por cobrar sin persistirlo:
+        /// Pagada / Vencida / Parcialmente Pagada / Pendiente.
+        /// </summary>
+        private static string CalcularEstadoEfectivo(CuentasCobrarEntity cxc)
+        {
+            if (cxc.Estado == 2 || (cxc.SaldoPendiente ?? 0) <= 0)
+                return "Pagada";
+
+            if (cxc.FechaVencimiento.HasValue && cxc.FechaVencimiento.Value < DateTime.Now)
+                return "Vencida";
+
+            if ((cxc.MontoTotal ?? 0) - (cxc.SaldoPendiente ?? 0) > 0)
+                return "Parcialmente Pagada";
+
+            return "Pendiente";
         }
 
         #endregion

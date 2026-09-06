@@ -1,4 +1,5 @@
 using DistribuidoraLaVilla.Application.Validators;
+using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS.Compras;
 using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Entities.Caja;
@@ -25,7 +26,8 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
         IGenericRepository<CajaMovimientoEntity, int> cajaMovimientoRepository,
         IUnitOfWork unitOfWork,
         IGenericRepository<UnidadMedidaEntity, int>? unidadMedidaRepository = null,
-        IGenericRepository<UsuariosEntity, Guid>? usuariosRepository = null)
+        IGenericRepository<UsuariosEntity, Guid>? usuariosRepository = null,
+        IAuditoriaService? auditoriaService = null)
     {
         private readonly IGenericRepository<OrdenCompraEntity, int> _ordenCompraRepository = ordenCompraRepository;
         private readonly IGenericRepository<DetalleCompraEntity, int> _detalleRepository = detalleRepository;
@@ -40,6 +42,7 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
         private readonly IGenericRepository<CajaMovimientoEntity, int> _cajaMovimientoRepository = cajaMovimientoRepository;
         private readonly IGenericRepository<UnidadMedidaEntity, int>? _unidadMedidaRepository = unidadMedidaRepository;
         private readonly IGenericRepository<UsuariosEntity, Guid>? _usuariosRepository = usuariosRepository;
+        private readonly IAuditoriaService? _auditoriaService = auditoriaService;
         private readonly IUnitOfWork _unitOfWork = unitOfWork;
         private readonly CrearOrdenCompraDTOValidator _validator = new();
         private readonly RegistrarRecepcionCompraDTOValidator _recepcionValidator = new();
@@ -299,7 +302,7 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                     NumeroFacturaProveedor = dto.NumeroFacturaProveedor.Trim(),
                     FechaFactura = dto.FechaFactura,
                     FechaRecepcion = dto.FechaRecepcion,
-                    FechaVencimiento = dto.FechaVencimiento,
+                    FechaVencimiento = dto.FechaVencimiento ?? dto.FechaVencimientoLotes,
                     FechaVencimientoLotes = dto.FechaVencimientoLotes,
                     IdMarca = dto.IdMarca,
                     MontoTotal = orden.Total,
@@ -378,6 +381,16 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                     };
 
                     await _cajaMovimientoRepository.CreateAsync(movimientoCaja);
+
+                    if (_auditoriaService != null)
+                    {
+                        await _auditoriaService.RegistrarAsync(
+                            "CajaMovimiento",
+                            movimientoCaja.Id.ToString(),
+                            "EgresoContado",
+                            $"Pago contado de orden de compra #{orden.Id} - Factura {recepcion.NumeroFacturaProveedor} por {totalRecepcion:0.00}",
+                            idUsuario);
+                    }
                 }
                 else
                 {

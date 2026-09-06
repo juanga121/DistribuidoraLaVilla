@@ -57,6 +57,21 @@ namespace DistribuidoraLaVilla.Application.Services
             if (proveedor == null)
                 throw new Exception("El proveedor especificado no existe");
 
+            if (dto.MontoTotal <= 0)
+                throw new Exception("El monto de la cuenta por pagar debe ser mayor a cero");
+
+            // Evita CxP duplicadas para una misma orden de compra (creación manual).
+            if (dto.IdOrdenCompra.HasValue)
+            {
+                var duplicada = _cxpRepository.GetByFilter(c =>
+                    c.IdOrdenCompra == dto.IdOrdenCompra.Value &&
+                    c.Estado != (int)EstadoCuentaPagar.Cancelada).FirstOrDefault();
+
+                if (duplicada != null)
+                    throw new Exception(
+                        $"Ya existe una cuenta por pagar (id {duplicada.IdCuentaPagar}) para la orden de compra {dto.IdOrdenCompra.Value}");
+            }
+
             var entity = new CuentasPagarEntity
             {
                 IdProveedor = dto.IdProveedor,
@@ -71,29 +86,44 @@ namespace DistribuidoraLaVilla.Application.Services
                 IdUsuario = idUsuario == Guid.Empty ? null : idUsuario
             };
 
-            await _cxpRepository.CreateAsync(entity);
+            if (_unitOfWork != null)
+                await _unitOfWork.BeginTransactionAsync();
 
-            await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+            try
             {
-                TipoMovimiento = "CxP",
-                SubTipo = "Creacion",
-                Descripcion = $"Creación de cuenta por pagar: {entity.Descripcion}",
-                Monto = entity.MontoTotal,
-                Direccion = "Egreso",
-                OrigenModulo = "CuentasPagar",
-                ReferenciaId = entity.IdCuentaPagar,
-                FechaMovimiento = DateTime.Now,
-                Estado = 1
-            }, idUsuario);
+                await _cxpRepository.CreateAsync(entity);
 
-            await _auditoriaService.RegistrarAsync(
-                "CuentasPagar",
-                entity.IdCuentaPagar.ToString(),
-                "Crear",
-                $"Cuenta por pagar creada para proveedor {dto.IdProveedor}, monto: {dto.MontoTotal}",
-                idUsuario);
+                await _movimientosService.CrearMovimientoAsync(new CrearMovimientoFinancieroDTO
+                {
+                    TipoMovimiento = "CxP",
+                    SubTipo = "Creacion",
+                    Descripcion = $"Creación de cuenta por pagar: {entity.Descripcion}",
+                    Monto = entity.MontoTotal,
+                    Direccion = "Egreso",
+                    OrigenModulo = "CuentasPagar",
+                    ReferenciaId = entity.IdCuentaPagar,
+                    FechaMovimiento = DateTime.Now,
+                    Estado = 1
+                }, idUsuario);
 
-            return MapearADTO(entity, proveedor.Nombre);
+                await _auditoriaService.RegistrarAsync(
+                    "CuentasPagar",
+                    entity.IdCuentaPagar.ToString(),
+                    "Crear",
+                    $"Cuenta por pagar creada para proveedor {dto.IdProveedor}, monto: {dto.MontoTotal}",
+                    idUsuario);
+
+                if (_unitOfWork != null)
+                    await _unitOfWork.CommitAsync();
+
+                return MapearADTO(entity, proveedor.Nombre);
+            }
+            catch
+            {
+                if (_unitOfWork != null && _unitOfWork.HasActiveTransaction)
+                    await _unitOfWork.RollbackAsync();
+                throw;
+            }
         }
 
         public async Task<List<CuentasPagarDTO>> ObtenerTodosAsync(int? estado = null)

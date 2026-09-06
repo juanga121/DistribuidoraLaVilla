@@ -10,6 +10,7 @@ namespace DistribuidoraLaVilla.Domain.DTOS.CxC
         public DateTime FechaVencimiento { get; set; }
         public decimal MontoTotal { get; set; }
         public decimal SaldoPendiente { get; set; }
+        public decimal MontoPagado { get; set; }
         public string Estado { get; set; } = string.Empty;
         public int DiasVencidos { get; set; }
     }

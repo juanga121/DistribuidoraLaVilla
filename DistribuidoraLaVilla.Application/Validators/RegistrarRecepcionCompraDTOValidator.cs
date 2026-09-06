@@ -20,9 +20,15 @@ namespace DistribuidoraLaVilla.Application.Validators
                 .NotEmpty()
                 .WithMessage("Debe especificar la fecha de recepción");
 
+            // La fecha de vencimiento de la CxP solo aplica a compras a crédito.
             RuleFor(x => x.FechaVencimiento)
                 .NotEmpty()
+                .When(x => (x.FormaPago ?? 2) == (int)DistribuidoraLaVilla.Domain.Enums.FormaPago.Credito)
+                .WithMessage("La fecha de vencimiento es obligatoria para compras a crédito");
+
+            RuleFor(x => x.FechaVencimiento)
                 .GreaterThan(x => x.FechaRecepcion)
+                .When(x => x.FechaVencimiento.HasValue)
                 .WithMessage("La fecha de vencimiento debe ser posterior a la fecha de recepción");
 
             RuleFor(x => x.FechaVencimientoLotes)
