@@ -6,7 +6,10 @@ using DistribuidoraLaVilla.Domain.Entities.Compras;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
 using DistribuidoraLaVilla.Domain.Enums;
 using DistribuidoraLaVilla.Domain.Interfaces;
+using DistribuidoraLaVilla.Infrastructure.Data;
+using DistribuidoraLaVilla.Infrastructure.Repositories;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 
 namespace DistribuidoraLaVilla.Api.Tests.Tests
@@ -49,6 +52,24 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             _uow.Setup(u => u.BeginTransactionAsync(default)).Returns(Task.CompletedTask);
             _uow.Setup(u => u.CommitAsync(default)).Returns(Task.CompletedTask);
             _uow.Setup(u => u.RollbackAsync(default)).Returns(Task.CompletedTask);
+        }
+
+        /// <summary>
+        /// Crea un GenericRepository real sobre un DataContext InMemory para que
+        /// GetQueryable() soporte operaciones async (FirstOrDefaultAsync).
+        /// </summary>
+        private static IGenericRepository<CajaAperturaEntity, int> CrearRepoCajaInMemory(List<CajaAperturaEntity>? aperturas = null)
+        {
+            var options = new DbContextOptionsBuilder<DataContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+
+            var context = new DataContext(options);
+            if (aperturas != null && aperturas.Count > 0)
+                context.Set<CajaAperturaEntity>().AddRange(aperturas);
+            context.SaveChanges();
+
+            return new GenericRepository<CajaAperturaEntity, int>(context);
         }
 
         private static OrdenCompraEntity CreateOrden(int id = 10, int estado = (int)EstadoCompraEnum.Aprobada) => new()
@@ -244,10 +265,10 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             dto.FormaPago = (int)FormaPago.Contado;
 
             _cajaAperturaRepo.Setup(r => r.GetQueryable())
-                .Returns(new List<CajaAperturaEntity>
+                .Returns(CrearRepoCajaInMemory(new List<CajaAperturaEntity>
                 {
                     new() { Id = 1, Estado = (int)EstadoCajaEnum.Abierta, MontoInicial = 100m }
-                }.AsQueryable());
+                }).GetQueryable());
 
             CajaMovimientoEntity? egresoCapturado = null;
             var cxpHuboLlamada = false;
@@ -279,7 +300,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             dto.FormaPago = (int)FormaPago.Contado;
 
             _cajaAperturaRepo.Setup(r => r.GetQueryable())
-                .Returns(Enumerable.Empty<CajaAperturaEntity>().AsQueryable());
+                .Returns(CrearRepoCajaInMemory().GetQueryable());
 
             var act = async () => await _service.RegistrarRecepcionCompraAsync(10, dto, UsuarioId);
 

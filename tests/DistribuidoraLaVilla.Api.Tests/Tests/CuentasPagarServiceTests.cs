@@ -13,6 +13,9 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
         private readonly Mock<IGenericRepository<CuentasPagarEntity, int>> _cxpRepoMock;
         private readonly Mock<IGenericRepository<ProveedoresEntity, Guid>> _proveedoresRepoMock;
         private readonly Mock<IAuditoriaService> _auditoriaServiceMock;
+        private readonly Mock<ICajaService> _cajaServiceMock;
+        private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+        private readonly Mock<IGenericRepository<PagoCxPEntity, int>> _pagoRepoMock;
         private readonly MovimientosFinancierosService _movimientosService;
         private readonly CuentasPagarService _service;
 
@@ -24,14 +27,20 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             _cxpRepoMock = new Mock<IGenericRepository<CuentasPagarEntity, int>>();
             _proveedoresRepoMock = new Mock<IGenericRepository<ProveedoresEntity, Guid>>();
             _auditoriaServiceMock = new Mock<IAuditoriaService>();
+            _cajaServiceMock = new Mock<ICajaService>();
+            _unitOfWorkMock = new Mock<IUnitOfWork>();
+            _pagoRepoMock = new Mock<IGenericRepository<PagoCxPEntity, int>>();
             _movimientosService = new MovimientosFinancierosService(
                 new Mock<IGenericRepository<MovimientosFinancierosEntity, int>>().Object);
 
             _service = new CuentasPagarService(
                 _cxpRepoMock.Object,
                 _proveedoresRepoMock.Object,
+                _pagoRepoMock.Object,
                 _auditoriaServiceMock.Object,
-                _movimientosService);
+                _movimientosService,
+                _cajaServiceMock.Object,
+                _unitOfWorkMock.Object);
         }
 
         // ── Helpers ──
@@ -328,7 +337,8 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
 
             // Assert
             result.SaldoPendiente.Should().Be(600);
-            result.Estado.Should().Be(1); // Still pending
+            result.Estado.Should().Be(4); // Parcialmente Pagada (estado efectivo derivado)
+            result.EstadoDescripcion.Should().Be("Parcialmente Pagada");
 
             _cxpRepoMock.Verify(r => r.UpdateAsync(It.Is<CuentasPagarEntity>(
                 e => e.SaldoPendiente == 600 && e.Estado == 1
