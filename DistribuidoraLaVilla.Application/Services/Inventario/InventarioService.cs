@@ -67,10 +67,12 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
 
                 var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
 
+                var hoy = DateTime.Now.Date;
                 var lotesDisponibles = _lotesMateriaPrimaRepository.GetByFilter(l =>
                     l.IdMateria == idMateriaPrima &&
                     l.Estado == 1 &&
-                    l.CantidadDisponible > 0
+                    l.CantidadDisponible > 0 &&
+                    l.FechaVencimiento >= hoy
                 ).OrderBy(l => l.FechaVencimiento).ToList();
 
                 var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
@@ -84,6 +86,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
 
                 var consumos = new List<ConsumoIngredienteDTO>();
                 decimal cantidadPendiente = cantidadRequerida;
+                decimal costoTotalConsumido = 0m;
 
                 foreach (var lote in lotesDisponibles)
                 {
@@ -107,6 +110,8 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
 
                     await _movimientosMateriaPrimaRepository.CreateAsync(movimiento);
 
+                    costoTotalConsumido += cantidadAConsumir * lote.CostoUnitario;
+
                     consumos.Add(new ConsumoIngredienteDTO
                     {
                         IdMateriaPrima = idMateriaPrima,
@@ -114,7 +119,8 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                         CantidadRequerida = cantidadRequerida,
                         CantidadConsumida = cantidadAConsumir,
                         UnidadMedida = unidadMedida?.Abreviatura,
-                        IdMovimiento = movimiento.Id
+                        IdMovimiento = movimiento.Id,
+                        CostoTotalConsumido = cantidadAConsumir * lote.CostoUnitario
                     });
 
                     cantidadPendiente -= cantidadAConsumir;
@@ -162,10 +168,12 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
 
                 var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
 
+                var hoy = DateTime.Now.Date;
                 var lotesDisponibles = _lotesProductosRepository.GetByFilter(l =>
                     l.IdProducto == idProducto &&
                     l.Estado == 1 &&
-                    l.CantidadDisponible > 0
+                    l.CantidadDisponible > 0 &&
+                    l.FechaVencimiento >= hoy
                 ).OrderBy(l => l.FechaVencimiento).ToList();
 
                 if (pesoPorUnidad.HasValue)

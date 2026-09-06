@@ -107,6 +107,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 await _ordenRepository.CreateAsync(orden);
 
                 var ingredientesConsumidos = new List<ConsumoIngredienteDTO>();
+                decimal costoRealTotal = 0m;
 
                 foreach (var ingrediente in ingredientesNecesarios)
                 {
@@ -119,7 +120,14 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     );
 
                     ingredientesConsumidos.AddRange(consumos);
+                    costoRealTotal += consumos.Sum(c => c.CostoTotalConsumido);
                 }
+
+                // Valorizar el lote producido por su COSTO REAL de materia prima consumida,
+                // nunca por el precio de venta del producto.
+                var costoUnitarioReal = solicitud.CantidadProducir > 0
+                    ? costoRealTotal / solicitud.CantidadProducir
+                    : 0m;
 
                 var nuevoLoteProducto = new LotesProductosEntity
                 {
@@ -130,9 +138,9 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     CantidadUnidades = (int)solicitud.CantidadProducir,
                     PesoTotal = solicitud.CantidadProducir,
                     IdUnidadMedida = solicitud.IdUnidadMedida,
-                    PrecioUnitario = producto.PrecioUnitario,
-                    PrecioKilo = producto.PrecioUnitario,
-                    PrecioTotal = producto.PrecioUnitario * solicitud.CantidadProducir,
+                    PrecioUnitario = costoUnitarioReal,
+                    PrecioKilo = costoUnitarioReal,
+                    PrecioTotal = costoRealTotal,
                     IdMarca = 1,
                     CantidadInicial = solicitud.CantidadProducir,
                     CantidadDisponible = solicitud.CantidadProducir,
@@ -147,7 +155,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     TipoMovimiento = (int)TipoMovimientoProducto.Entrada,
                     FechaMovimiento = DateTime.Now,
                     Cantidad = solicitud.CantidadProducir,
-                    TotalMovimiento = producto.PrecioUnitario * solicitud.CantidadProducir,
+                    TotalMovimiento = costoRealTotal,
                     IdUnidadMedida = solicitud.IdUnidadMedida,
                     IdCliente = null,
                     IdProveedor = null,
@@ -186,6 +194,7 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     IdLoteGenerado = nuevoLoteProducto.Id,
                     IdMovimientoEntradaProducto = movimientoEntradaProducto.Id,
                     FechaProduccion = DateTime.Now,
+                    CostoTotal = costoRealTotal,
                     IngredientesConsumidos = ingredientesConsumidos,
                     Observaciones = solicitud.Observaciones,
                     Mensaje = $"Producción exitosa: {solicitud.CantidadProducir} unidades de {producto.Nombre}"

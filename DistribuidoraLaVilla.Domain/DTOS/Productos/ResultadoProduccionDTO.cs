@@ -14,6 +14,11 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Productos
         public decimal CantidadConsumida { get; set; }
         public string? UnidadMedida { get; set; }
         public int IdMovimiento { get; set; }
+
+        /// <summary>
+        /// Costo real total del ingrediente consumido (Σ cantidad × costo unitario del lote de MP).
+        /// </summary>
+        public decimal CostoTotalConsumido { get; set; }
     }
 
     /// <summary>
@@ -29,6 +34,11 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Productos
         public int IdLoteGenerado { get; set; }
         public int IdMovimientoEntradaProducto { get; set; }
         public DateTime FechaProduccion { get; set; }
+
+        /// <summary>
+        /// Costo real total de la materia prima consumida para producir.
+        /// </summary>
+        public decimal CostoTotal { get; set; }
         public List<ConsumoIngredienteDTO> IngredientesConsumidos { get; set; } = new();
         public string? Observaciones { get; set; }
         public bool Exitoso { get; set; }
