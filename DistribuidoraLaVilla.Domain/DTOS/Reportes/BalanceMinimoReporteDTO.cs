@@ -58,6 +58,12 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Reportes
         public decimal CantidadDisponible { get; set; }
         public decimal ValorUnitario { get; set; }
         public decimal ValorTotal { get; set; }
+
+        /// <summary>Inventory mode of the product: 1 = Unidad, 2 = Peso, 3 = Peso variable.</summary>
+        public int ModoInventario { get; set; } = 1;
+
+        /// <summary>Unit of <see cref="CantidadDisponible"/>: "kg" in weight modes, "und." in unit mode.</summary>
+        public string SimboloUnidad { get; set; } = "und.";
     }
 
     public class BalanceMateriaPrimaItemDTO

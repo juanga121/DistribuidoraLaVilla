@@ -27,6 +27,16 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Productos
         public decimal CantidadInicial { get; set; }
         public decimal CantidadDisponible { get; set; }
         public decimal PesoDisponible { get; set; }
+
+        /// <summary>Inventory mode of the product: 1 = Unidad, 2 = Peso, 3 = Peso variable.</summary>
+        public int ModoInventario { get; set; } = 1;
+
+        /// <summary>
+        /// Unit in which <see cref="CantidadDisponible"/> and <see cref="CantidadInicial"/> are expressed:
+        /// kilograms (id 1) for weight modes, units (id 2) for unit mode.
+        /// </summary>
+        public int IdUnidadMedidaStock => ModoInventario == 1 ? 2 : 1;
+
         public int Estado { get; set; }
     }
 }

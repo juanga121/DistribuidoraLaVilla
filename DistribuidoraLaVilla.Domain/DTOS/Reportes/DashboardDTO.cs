@@ -34,7 +34,18 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Reportes
         public int IdProducto { get; set; }
         public string NombreProducto { get; set; } = string.Empty;
         public decimal TotalVendido { get; set; }
-        public int CantidadVendida { get; set; }
+
+        /// <summary>
+        /// Cantidad vendida en la unidad del producto: kilogramos en los modos por peso,
+        /// unidades en el modo por unidad. Es decimal para no truncar ventas por peso.
+        /// </summary>
+        public decimal CantidadVendida { get; set; }
+
+        /// <summary>Inventory mode of the product: 1 = Unidad, 2 = Peso, 3 = Peso variable.</summary>
+        public int ModoInventario { get; set; } = 1;
+
+        /// <summary>Unit of <see cref="CantidadVendida"/>: "kg" en modos por peso, "und." en modo unidad.</summary>
+        public string SimboloUnidad { get; set; } = "und.";
     }
 
     public class CxcResumenDTO
@@ -48,7 +59,15 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Reportes
         public int IdProducto { get; set; }
         public string NombreProducto { get; set; } = string.Empty;
         public decimal StockActual { get; set; }
-        public int StockMinimo { get; set; }
+
+        /// <summary>Minimum stock before the product is reported as low, in the mode unit.</summary>
+        public decimal StockMinimo { get; set; }
+
+        /// <summary>Inventory mode of the product: 1 = Unidad, 2 = Peso, 3 = Peso variable.</summary>
+        public int ModoInventario { get; set; } = 1;
+
+        /// <summary>Unit of <see cref="StockActual"/> and <see cref="StockMinimo"/>: "kg" o "und.".</summary>
+        public string SimboloUnidad { get; set; } = "und.";
     }
 
     public class FacturaResumenDTO

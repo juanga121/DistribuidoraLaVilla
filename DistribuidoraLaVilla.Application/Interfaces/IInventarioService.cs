@@ -40,8 +40,15 @@ namespace DistribuidoraLaVilla.Application.Interfaces
         /// <param name="idUsuario">Usuario que realiza la operación</param>
         /// <param name="idCliente">Cliente al que se le descuenta el stock</param>
         /// <param name="observacion">Descripción del movimiento</param>
-        /// <param name="esVentaPorPeso">Indica si la venta se realiza por peso para ese detalle</param>
-        /// <param name="pesoPorUnidad">Peso por unidad en kg (para conversión unitario↔peso)</param>
+        /// <param name="esVentaPorPeso">
+        /// Indica si <paramref name="cantidadRequerida"/> se expresa en kilogramos (true) o en
+        /// unidades (false). El modo de inventario solo decide qué contador del lote manda:
+        /// en los modos por peso el stock real son los kilogramos del lote.
+        /// </param>
+        /// <param name="pesoRealLinea">
+        /// Peso real de la mercadería en kilogramos. Obligatorio cuando un producto mixto se vende
+        /// por unidad: es el peso pesado en el mostrador y mueve el stock sin conversiones.
+        /// </param>
         /// <returns>Lista de consumos realizados por lote</returns>
         Task<List<ConsumoProductoDTO>> ConsumirLotesProductoAsync(
             int idProducto,
@@ -51,6 +58,6 @@ namespace DistribuidoraLaVilla.Application.Interfaces
             Guid idCliente,
             string observacion,
             bool esVentaPorPeso,
-            decimal? pesoPorUnidad = null);
+            decimal? pesoRealLinea = null);
     }
 }

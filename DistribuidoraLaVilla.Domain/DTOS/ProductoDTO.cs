@@ -15,5 +15,12 @@ namespace DistribuidoraLaVilla.Domain.DTOS
         public bool VentaPorPeso { get; set; }
         public decimal? PrecioPorKilo { get; set; }
         public decimal? PesoPorUnidad { get; set; }
+        public int ModoInventario { get; set; }
+
+        /// <summary>
+        /// Minimum stock before the product is reported as low, in the product's mode unit.
+        /// Null or omitted means the mode default applies.
+        /// </summary>
+        public decimal? StockMinimo { get; set; }
     }
 }

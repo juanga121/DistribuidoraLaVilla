@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DistribuidoraLaVilla.Application.Interfaces;
+using DistribuidoraLaVilla.Application.Services.Inventario;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Domain.DTOS;
@@ -50,23 +51,26 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
             try
             {
-                var precioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
+                var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto)
+                    ?? throw new InvalidOperationException(
+                        $"No se encontró el producto con ID {lotesProductosDTO.IdProducto}");
 
-                var producto = await _productosRepository.FindByIdAsync(lotesProductosDTO.IdProducto);
-                var pesoPorUnidad = producto?.PesoPorUnidad;
+                var operaPorPeso = ProductoStockRules.OperaPorPeso(producto);
+                ValidarCantidadesPorModo(operaPorPeso, lotesProductosDTO);
+                var precioTotal = ProductoStockRules.CalcularImporte(
+                    operaPorPeso,
+                    lotesProductosDTO.CantidadUnidades,
+                    lotesProductosDTO.PesoTotal,
+                    lotesProductosDTO.PrecioUnitario,
+                    lotesProductosDTO.PrecioKilo);
 
-                decimal cantidadDisponible;
-                decimal pesoDisponible;
-                if (pesoPorUnidad.HasValue)
-                {
-                    cantidadDisponible = lotesProductosDTO.CantidadUnidades;
-                    pesoDisponible = lotesProductosDTO.CantidadUnidades * pesoPorUnidad.Value;
-                }
-                else
-                {
-                    cantidadDisponible = lotesProductosDTO.PesoTotal;
-                    pesoDisponible = lotesProductosDTO.PesoTotal;
-                }
+                // The lot's authoritative counter always holds the stock in the product's mode unit:
+                // kilograms for weight modes, units for unit mode.
+                var cantidadDisponible = ProductoStockRules.CantidadAutoritativa(
+                    operaPorPeso,
+                    lotesProductosDTO.CantidadUnidades,
+                    lotesProductosDTO.PesoTotal);
+                var pesoDisponible = operaPorPeso ? lotesProductosDTO.PesoTotal : 0m;
 
                 LotesProductosEntity entity = new()
                 {
@@ -75,10 +79,10 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     FechaEntrada = DateTime.Now,
                     FechaVencimiento = lotesProductosDTO.FechaVencimiento,
                     CantidadUnidades = lotesProductosDTO.CantidadUnidades,
-                    PesoTotal = lotesProductosDTO.PesoTotal,
-                    IdUnidadMedida = lotesProductosDTO.IdUnidadMedida,
-                    PrecioUnitario = lotesProductosDTO.PrecioUnitario,
-                    PrecioKilo = lotesProductosDTO.PrecioKilo,
+                    PesoTotal = operaPorPeso ? lotesProductosDTO.PesoTotal : 0m,
+                    IdUnidadMedida = ProductoStockRules.UnidadMedidaId(operaPorPeso),
+                    PrecioUnitario = operaPorPeso ? 0m : lotesProductosDTO.PrecioUnitario,
+                    PrecioKilo = operaPorPeso ? lotesProductosDTO.PrecioKilo : 0m,
                     PrecioTotal = precioTotal,
                     IdMarca = lotesProductosDTO.IdMarca,
                     CantidadInicial = cantidadDisponible,
@@ -106,11 +110,13 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     IdLoteProducto = entity.Id,
                     TipoMovimiento = (int)TipoMovimientoProducto.Entrada,
                     FechaMovimiento = DateTime.Now,
-                    Cantidad = lotesProductosDTO.PesoTotal,
+                    Cantidad = cantidadDisponible,
                     TotalMovimiento = precioTotal,
-                    IdUnidadMedida = lotesProductosDTO.IdUnidadMedida,
+                    IdUnidadMedida = ProductoStockRules.UnidadMedidaId(operaPorPeso),
                     IdUsuario = lotesProductosDTO.IdUsuario,
-                    Observacion = $"Ingreso de lote - {lotesProductosDTO.CantidadUnidades} unidades, {lotesProductosDTO.PesoTotal} kg",
+                    Observacion = operaPorPeso
+                        ? $"Ingreso de lote - {lotesProductosDTO.PesoTotal} kg"
+                        : $"Ingreso de lote - {lotesProductosDTO.CantidadUnidades} unidades",
                     Estado = 1
                 };
                 await _movimientosProductosRepository.CreateAsync(movimiento);
@@ -227,31 +233,54 @@ var lote = await _lotesProductosRepository.FindByIdAsync(id);
 
             try
             {
-                var diferenciaCantidad = lotesProductosDTO.CantidadUnidades - lote.CantidadUnidades;
-                var diferenciaPeso = lotesProductosDTO.PesoTotal - lote.PesoTotal;
+                var producto = await _productosRepository.FindByIdAsync(lote.IdProducto)
+                    ?? throw new InvalidOperationException(
+                        $"No se encontró el producto con ID {lote.IdProducto} asociado al lote {id}");
 
-                var cantidadConsumida = lote.CantidadUnidades - lote.CantidadDisponible;
-                var pesoConsumido = lote.PesoTotal - lote.PesoDisponible;
+                if (lotesProductosDTO.IdProducto != lote.IdProducto)
+                {
+                    throw new InvalidOperationException("No se puede cambiar el producto de un lote existente");
+                }
 
-                if (lotesProductosDTO.CantidadUnidades < cantidadConsumida || lotesProductosDTO.PesoTotal < pesoConsumido)
+                var operaPorPeso = ProductoStockRules.OperaPorPeso(producto);
+                ValidarCantidadesPorModo(operaPorPeso, lotesProductosDTO);
+
+                // The authoritative counter is always in the product's mode unit, so the requested total
+                // and the already-consumed quantity are compared in that same unit. Legacy lots hold their
+                // initial quantity and their available quantity on the same scale, so their difference is
+                // the consumed amount.
+                var nuevoTotal = ProductoStockRules.CantidadAutoritativa(
+                    operaPorPeso,
+                    lotesProductosDTO.CantidadUnidades,
+                    lotesProductosDTO.PesoTotal);
+                var cantidadConsumida = lote.CantidadInicial - lote.CantidadDisponible;
+
+                if (nuevoTotal < cantidadConsumida)
                 {
                     throw new InvalidOperationException(
                         "No se puede reducir el lote por debajo de lo ya consumido");
                 }
 
-                lote.IdProducto = lotesProductosDTO.IdProducto;
+                var nuevaCantidadDisponible = nuevoTotal - cantidadConsumida;
+
                 lote.IdProveedor = lotesProductosDTO.IdProveedor;
                 lote.FechaVencimiento = lotesProductosDTO.FechaVencimiento;
                 lote.CantidadUnidades = lotesProductosDTO.CantidadUnidades;
-                lote.PesoTotal = lotesProductosDTO.PesoTotal;
-                lote.IdUnidadMedida = lotesProductosDTO.IdUnidadMedida;
-                lote.PrecioUnitario = lotesProductosDTO.PrecioUnitario;
-                lote.PrecioKilo = lotesProductosDTO.PrecioKilo;
-                lote.PrecioTotal = CalculoPrecioTotal(lotesProductosDTO.CantidadUnidades, lotesProductosDTO.PrecioUnitario);
+                lote.PesoTotal = operaPorPeso ? nuevoTotal : 0m;
+                lote.IdUnidadMedida = ProductoStockRules.UnidadMedidaId(operaPorPeso);
+                lote.PrecioUnitario = operaPorPeso ? 0m : lotesProductosDTO.PrecioUnitario;
+                lote.PrecioKilo = operaPorPeso ? lotesProductosDTO.PrecioKilo : 0m;
+                lote.PrecioTotal = ProductoStockRules.CalcularImporte(
+                    operaPorPeso,
+                    lotesProductosDTO.CantidadUnidades,
+                    lotesProductosDTO.PesoTotal,
+                    lotesProductosDTO.PrecioUnitario,
+                    lotesProductosDTO.PrecioKilo);
                 lote.IdMarca = lotesProductosDTO.IdMarca;
 
-                lote.CantidadDisponible += diferenciaCantidad;
-                lote.PesoDisponible += diferenciaPeso;
+                lote.CantidadInicial = nuevoTotal;
+                lote.CantidadDisponible = nuevaCantidadDisponible;
+                lote.PesoDisponible = operaPorPeso ? nuevaCantidadDisponible : 0m;
 
                 await _lotesProductosRepository.UpdateAsync(lote);
 
@@ -260,9 +289,10 @@ var lote = await _lotesProductosRepository.FindByIdAsync(id);
                     var detalle = JsonSerializer.Serialize(new
                     {
                         cantidadUnidades = lotesProductosDTO.CantidadUnidades,
-                        diferenciaCantidad,
                         pesoTotal = lotesProductosDTO.PesoTotal,
-                        diferenciaPeso
+                        totalAutoritativo = nuevoTotal,
+                        cantidadConsumida,
+                        cantidadDisponible = nuevaCantidadDisponible
                     });
                     await _auditoriaService.RegistrarAsync("StockProducto", id.ToString(), "Modificar", detalle, lotesProductosDTO.IdUsuario);
                 }
@@ -311,7 +341,9 @@ var lote = await _lotesProductosRepository.FindByIdAsync(id);
                     TotalMovimiento = existente.PrecioTotal,
                     IdUnidadMedida = existente.IdUnidadMedida,
                     IdUsuario = idUsuario,
-                    Observacion = $"Eliminación de lote - {existente.CantidadDisponible} kg",
+                    Observacion = existente.IdUnidadMedida == ProductoStockRules.IdUnidadMedidaKilo
+                        ? $"Eliminación de lote - {existente.CantidadDisponible} kg"
+                        : $"Eliminación de lote - {existente.CantidadDisponible} unidades",
                     Estado = 1
                 };
                 await _movimientosProductosRepository.CreateAsync(movimiento);
@@ -342,6 +374,31 @@ var lote = await _lotesProductosRepository.FindByIdAsync(id);
                 if (ownTransaction)
                     await _unitOfWork!.DisposeAsync();
             }
+        }
+
+        /// <summary>
+        /// Requires only the quantities and prices that the product's inventory mode actually uses.
+        /// Weight modes work with kilograms and a cost per kilogram; unit mode works with units and a
+        /// cost per unit. The unused values are ignored.
+        /// </summary>
+        private static void ValidarCantidadesPorModo(bool operaPorPeso, LotesProductosDTO dto)
+        {
+            if (operaPorPeso)
+            {
+                if (dto.PesoTotal <= 0)
+                    throw new ValidationException("El peso total debe ser mayor a 0 para un producto que se administra por peso");
+
+                if (dto.PrecioKilo <= 0)
+                    throw new ValidationException("El costo por kilo debe ser mayor a 0 para un producto que se administra por peso");
+
+                return;
+            }
+
+            if (dto.CantidadUnidades <= 0)
+                throw new ValidationException("La cantidad de unidades debe ser mayor a 0 para un producto que se administra por unidad");
+
+            if (dto.PrecioUnitario <= 0)
+                throw new ValidationException("El costo unitario debe ser mayor a 0 para un producto que se administra por unidad");
         }
 
         private async Task<List<LotesProductosResponseDTO>> MapearARespuestaAsync(List<LotesProductosEntity> lotes)
@@ -378,14 +435,11 @@ var lote = await _lotesProductosRepository.FindByIdAsync(id);
                 CantidadInicial = l.CantidadInicial,
                 CantidadDisponible = l.CantidadDisponible,
                 PesoDisponible = l.PesoDisponible,
+                ModoInventario = productosDict.ContainsKey(l.IdProducto)
+                    ? ProductoStockRules.ResolverModo(productosDict[l.IdProducto].ModoInventario, productosDict[l.IdProducto].VentaPorPeso)
+                    : (int)ModoInventarioEnum.Unidad,
                 Estado = l.Estado
             }).ToList();
-        }
-
-        private static decimal CalculoPrecioTotal(int cantidadUnidades, decimal precioUnitario)
-        {
-            var precioTotal = cantidadUnidades * precioUnitario;
-            return precioTotal;
         }
     }
 }

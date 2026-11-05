@@ -1,5 +1,6 @@
 using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Application.Interfaces;
+using DistribuidoraLaVilla.Application.Services.Inventario;
 using DistribuidoraLaVilla.Domain.DTOS.Compras;
 using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Entities.Caja;
@@ -150,7 +151,8 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                     PrecioUnitario = det.PrecioUnitario,
                     Subtotal = det.Subtotal,
                     VentaPorPeso = producto?.VentaPorPeso ?? false,
-                    PesoPorUnidad = producto?.PesoPorUnidad
+                    PesoPorUnidad = producto?.PesoPorUnidad,
+                    ModoInventario = producto?.ModoInventario ?? 1
                 });
             }
 
@@ -200,12 +202,17 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                 var subtotal = lote.PrecioTotal;
                 total += subtotal;
 
+                // El comprobante muestra la cantidad recibida en la unidad en que el lote mide su stock
+                // (kilogramos en los modos por peso, unidades en el modo por unidad) junto al precio de
+                // esa misma unidad.
+                var loteEnPeso = lote.IdUnidadMedida == ProductoStockRules.IdUnidadMedidaKilo;
+
                 detalles.Add(new ComprobanteCompraDetalleDTO
                 {
                     ProductoNombre = producto?.Nombre ?? $"Producto ID {lote.IdProducto}",
-                    Cantidad = lote.CantidadUnidades,
+                    Cantidad = lote.CantidadInicial,
                     UnidadMedida = unidad?.Abreviatura ?? "",
-                    PrecioUnitario = lote.PrecioUnitario,
+                    PrecioUnitario = loteEnPeso ? lote.PrecioKilo : lote.PrecioUnitario,
                     Subtotal = subtotal
                 });
             }
@@ -336,8 +343,13 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                         ?? throw new KeyNotFoundException($"No se encontró el producto con ID {detalle.IdProducto}");
 
                     await CrearLoteYMovimientoAsync(orden, detalle, producto, recepcion, idUsuario);
-                    totalRecepcion += detalle.CantidadUnidades * detalle.PrecioUnitario;
+                    totalRecepcion += CalcularImporteDetalle(producto, detalle);
                 }
+
+                // La recepción se creó con el total de la orden; el monto real es el que
+                // resulta de lo efectivamente recepcionado según el modo de inventario.
+                recepcion.MontoTotal = totalRecepcion;
+                await _recepcionCompraRepository.UpdateAsync(recepcion);
 
                 var cuentaPagar = new CuentasPagarEntity
                 {
@@ -443,6 +455,25 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
             return producto?.Nombre;
         }
 
+        /// <summary>
+        /// Indica si el producto administra su stock en kilogramos. Delega en
+        /// <see cref="ProductoStockRules"/> para que la regla viva en un solo lugar.
+        /// </summary>
+        private static bool OperaPorPeso(ProductosEntity producto) =>
+            ProductoStockRules.OperaPorPeso(producto);
+
+        /// <summary>
+        /// Valora una línea de recepción según lo que informa la factura del proveedor:
+        /// los modos por peso se valoran por kilogramo y los modos por unidad por unidad.
+        /// </summary>
+        private static decimal CalcularImporteDetalle(ProductosEntity producto, RegistrarRecepcionCompraDetalleDTO detalle) =>
+            ProductoStockRules.CalcularImporte(
+                ProductoStockRules.OperaPorPeso(producto),
+                detalle.CantidadUnidades,
+                detalle.PesoTotal,
+                detalle.PrecioUnitario,
+                detalle.PrecioKilo);
+
         private async Task CrearLoteYMovimientoAsync(
             OrdenCompraEntity orden,
             RegistrarRecepcionCompraDetalleDTO detalle,
@@ -450,36 +481,55 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
             RecepcionCompraEntity recepcion,
             Guid idUsuario)
         {
-            var ventaPorPeso = producto.VentaPorPeso;
-            var pesoPorUnidad = producto.PesoPorUnidad;
-            if (ventaPorPeso && (!pesoPorUnidad.HasValue || pesoPorUnidad <= 0))
+            var operaPorPeso = OperaPorPeso(producto);
+
+            if (operaPorPeso)
             {
-                throw new InvalidOperationException(
-                    $"El producto '{producto.Nombre}' está habilitado para venta por peso pero no tiene peso por unidad definido");
+                if (detalle.PesoTotal <= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"La recepción del producto '{producto.Nombre}' debe incluir un peso total mayor a 0");
+                }
+
+                if (detalle.PrecioKilo <= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"La recepción del producto '{producto.Nombre}' debe incluir un costo por kilo mayor a 0");
+                }
+            }
+            else
+            {
+                if (detalle.CantidadUnidades <= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"La recepción del producto '{producto.Nombre}' debe incluir una cantidad de unidades mayor a 0");
+                }
+
+                if (detalle.PrecioUnitario <= 0)
+                {
+                    throw new InvalidOperationException(
+                        $"La recepción del producto '{producto.Nombre}' debe incluir un costo unitario mayor a 0");
+                }
             }
 
-            var idUnidadMedida = ventaPorPeso ? 1 : 2;
-            if (detalle.IdUnidadMedida > 0 && detalle.IdUnidadMedida != idUnidadMedida)
-            {
-                throw new InvalidOperationException(
-                    $"La unidad de medida del detalle no coincide con el modo del producto '{producto.Nombre}'");
-            }
+            // La unidad de medida se deriva del modo de inventario: 1 = kilogramo, 2 = unidad.
+            // El valor informado por el cliente se ignora para no contradecir el modo del producto.
+            var idUnidadMedida = operaPorPeso ? 1 : 2;
 
-            if (detalle.PrecioUnitario <= 0 || detalle.PrecioKilo <= 0)
-            {
-                throw new InvalidOperationException(
-                    $"La recepción del producto '{producto.Nombre}' debe incluir ambos costos positivos");
-            }
-
-            // Reception is a data capture step: the operator reports the weight that physically
-            // arrived, so the lot is persisted with that submitted weight instead of one
-            // recomputed from the product's PesoPorUnidad. As a result the lot carries its own
-            // weight ratio (PesoTotal / CantidadUnidades), which can legitimately differ from
-            // the product's nominal ratio. Consumption conversion in InventarioService still
-            // uses the product ratio and will be revisited to consume this per-lot truth.
-            var cantidadDisponible = detalle.CantidadUnidades;
-            var pesoDisponible = detalle.PesoTotal;
-            var cantidadUnidades = Math.Max(1, (int)Math.Round(detalle.CantidadUnidades, MidpointRounding.AwayFromZero));
+            // Reception is a data capture step: the operator reports what the supplier invoice
+            // says, so the lot is persisted with that submitted data instead of one recomputed
+            // from the product's PesoPorUnidad. As a result the lot carries its own weight ratio
+            // (PesoTotal / CantidadUnidades), which can legitimately differ from the product's
+            // nominal ratio. Consumption in InventarioService uses that per-lot ratio.
+            //
+            // Para los modos por peso el stock real está en kilogramos: CantidadDisponible y
+            // CantidadInicial se expresan en kg y CantidadUnidades puede legítimamente ser 0.
+            var importe = CalcularImporteDetalle(producto, detalle);
+            var cantidadUnidades = operaPorPeso
+                ? Math.Max(0, (int)Math.Round(detalle.CantidadUnidades, MidpointRounding.AwayFromZero))
+                : Math.Max(1, (int)Math.Round(detalle.CantidadUnidades, MidpointRounding.AwayFromZero));
+            var cantidadDisponible = operaPorPeso ? detalle.PesoTotal : detalle.CantidadUnidades;
+            var pesoDisponible = operaPorPeso ? detalle.PesoTotal : 0m;
 
             var lote = new LotesProductosEntity
             {
@@ -492,7 +542,7 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                 IdUnidadMedida = idUnidadMedida,
                 PrecioUnitario = detalle.PrecioUnitario,
                 PrecioKilo = detalle.PrecioKilo,
-                PrecioTotal = detalle.CantidadUnidades * detalle.PrecioUnitario,
+                PrecioTotal = importe,
                 IdMarca = recepcion.IdMarca,
                 IdRecepcionCompra = recepcion.IdRecepcionCompra,
                 CantidadInicial = cantidadDisponible,
@@ -508,8 +558,8 @@ namespace DistribuidoraLaVilla.Application.Services.Compras
                     IdLoteProducto = lote.Id,
                     TipoMovimiento = (int)TipoMovimientoProducto.Entrada,
                     FechaMovimiento = recepcion.FechaRecepcion,
-                    Cantidad = detalle.CantidadUnidades,
-                    TotalMovimiento = lote.PrecioTotal,
+                    Cantidad = cantidadDisponible,
+                    TotalMovimiento = importe,
                     IdUnidadMedida = idUnidadMedida,
                     IdProveedor = orden.IdProveedor,
                     IdUsuario = idUsuario,

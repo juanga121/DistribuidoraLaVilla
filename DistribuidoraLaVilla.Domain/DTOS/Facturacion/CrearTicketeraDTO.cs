@@ -14,5 +14,8 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Facturacion
         public decimal Precio { get; set; }
         public int IdUnidadMedida { get; set; }
         public bool? EsVentaPorPeso { get; set; }
+
+        /// <summary>Peso real de la línea en kg; obligatorio al vender por unidad un producto mixto.</summary>
+        public decimal? PesoTotal { get; set; }
     }
 }

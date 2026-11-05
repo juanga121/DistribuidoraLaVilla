@@ -16,8 +16,16 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         public async Task<IActionResult> CrearProducto([FromBody] ProductoDTO productoDTO)
         {
             var idUsuario = GetUserId();
-            await _productosService.CrearProductoAsync(productoDTO, idUsuario);
-            return Ok();
+
+            try
+            {
+                await _productosService.CrearProductoAsync(productoDTO, idUsuario);
+                return Ok();
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
         }
 
         [HttpGet]
@@ -50,8 +58,20 @@ namespace DistribuidoraLaVilla.Api.Controllers.Productos
         public async Task<IActionResult> ActualizarProducto(int idProducto, [FromBody] ProductoDTO productoDTO)
         {
             var idUsuario = GetUserId();
-            await _productosService.ActualizarProducto(idProducto, productoDTO, idUsuario);
-            return Ok();
+
+            try
+            {
+                await _productosService.ActualizarProducto(idProducto, productoDTO, idUsuario);
+                return Ok();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
         }
 
         [HttpGet]

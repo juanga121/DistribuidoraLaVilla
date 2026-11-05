@@ -212,7 +212,8 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                 Cantidad = d.Cantidad,
                 Precio = d.Precio,
                 IdUnidadMedida = d.IdUnidadMedida,
-                EsVentaPorPeso = d.EsVentaPorPeso
+                EsVentaPorPeso = d.EsVentaPorPeso,
+                PesoTotal = d.PesoTotal
             }).ToList();
 
             var resultado = await CrearFacturaBaseAsync(
@@ -384,7 +385,7 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                         idCliente,
                         $"Venta Factura {(tipoFactura == TipoFacturaEnum.Credito ? "Crédito" : "Contado")} - Cliente: {cliente.Nombre ?? idCliente.ToString()}",
                         esVentaPorPeso,
-                        producto.PesoPorUnidad
+                        detalle.PesoTotal
                     );
 
                     // A FIFO sale can consume stock from multiple lots. Persist one
@@ -398,11 +399,12 @@ namespace DistribuidoraLaVilla.Application.Services.Facturacion
                             IdProducto = detalle.IdProducto,
                             IdLote = consumo.IdLote,
                             Cantidad = consumo.CantidadConsumida,
-                            IdUnidadMedida = detalle.IdUnidadMedida,
+                            // La unidad se deriva del modo: una línea por peso siempre es kg.
+                            IdUnidadMedida = esVentaPorPeso ? 1 : 2,
                             Precio = detalle.Precio,
                             Subtotal = consumo.CantidadConsumida * detalle.Precio,
                             EsVentaPorPeso = esVentaPorPeso,
-                            PesoTotal = esVentaPorPeso ? consumo.CantidadConsumida : null,
+                            PesoTotal = esVentaPorPeso ? consumo.CantidadConsumida : detalle.PesoTotal,
                             PrecioKilo = esVentaPorPeso ? detalle.Precio : null,
                             PrecioOriginal = esVentaPorPeso ? producto.PrecioPorKilo : (decimal?)producto.PrecioUnitario
                         });

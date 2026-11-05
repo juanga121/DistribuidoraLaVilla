@@ -74,6 +74,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             PrecioUnitario = precioUnitario,
             VentaPorPeso = false,
             PrecioPorKilo = null,
+            ModoInventario = 1,
             Estado = 1
         };
 
@@ -84,6 +85,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             PrecioUnitario = 0m,
             VentaPorPeso = true,
             PrecioPorKilo = precioPorKilo,
+            ModoInventario = 2,
             Estado = 1
         };
 
@@ -155,8 +157,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                     It.IsAny<Guid>(),
                     It.IsAny<Guid>(),
                     It.IsAny<string>(),
-                    It.IsAny<bool>(),
-                    It.IsAny<decimal?>()))
+                    It.IsAny<bool>()))
                 .ReturnsAsync(new List<ConsumoProductoDTO>
                 {
                     new()
@@ -234,7 +235,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             _detalleRepositoryMock.Verify(r => r.CreateAsync(It.IsAny<DetalleFacturaEntity>()), Times.Never);
             _inventarioServiceMock.Verify(
                 i => i.ConsumirLotesProductoAsync(It.IsAny<int>(), It.IsAny<decimal>(), It.IsAny<int>(),
-                    It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<decimal?>()),
+                    It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<bool>()),
                 Times.Never);
             _unitOfWorkMock.Verify(u => u.RollbackAsync(It.IsAny<CancellationToken>()), Times.Once);
         }

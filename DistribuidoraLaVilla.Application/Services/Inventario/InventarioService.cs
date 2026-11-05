@@ -1,4 +1,4 @@
-using DistribuidoraLaVilla.Application.Interfaces;
+﻿using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS.Inventario;
 using DistribuidoraLaVilla.Domain.DTOS.Productos;
 using DistribuidoraLaVilla.Domain.Entities;
@@ -153,7 +153,7 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
             Guid idCliente,
             string observacion,
             bool esVentaPorPeso,
-            decimal? pesoPorUnidad = null)
+            decimal? pesoRealLinea = null)
         {
             bool ownTransaction = !_unitOfWork.HasActiveTransaction;
 
@@ -166,101 +166,120 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                     ?? throw new InvalidOperationException(
                         $"No se encontró el producto con ID {idProducto}");
 
+                // The product's inventory mode owns the meaning of the quantity: weight modes keep
+                // their stock in kilograms and can only be sold by weight, unit mode sells by unit.
+                // The mixed mode keeps stock in kilograms but accepts both, converting a unit sale
+                // with the product's fixed weight per unit.
+                var operaPorPeso = ProductoStockRules.OperaPorPeso(producto);
+                var permiteMixta = ProductoStockRules.PermiteVentaMixta(producto);
+
+                if (!permiteMixta && operaPorPeso && !esVentaPorPeso)
+                {
+                    throw new InvalidOperationException(
+                        $"El producto '{producto.Nombre}' se administra por peso: la venta debe informarse en kilogramos");
+                }
+
+                if (!permiteMixta && !operaPorPeso && esVentaPorPeso)
+                {
+                    throw new InvalidOperationException(
+                        $"El producto '{producto.Nombre}' se administra por unidad: la venta debe informarse en unidades");
+                }
+
+                // En el modo mixto, una venta por unidad mueve el stock con el peso real pesado en
+                // el mostrador. No hay conversión: el factor sale de esta venta, no del producto.
+                var factorAKg = 1m;
+                if (permiteMixta && !esVentaPorPeso)
+                {
+                    if (!pesoRealLinea.HasValue || pesoRealLinea.Value <= 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"Para vender '{producto.Nombre}' por unidad hay que informar el peso de la mercadería: pesá las unidades y cargá el total en kg");
+                    }
+
+                    if (cantidadRequerida <= 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"La cantidad vendida de '{producto.Nombre}' debe ser mayor a 0");
+                    }
+
+                    factorAKg = pesoRealLinea.Value / cantidadRequerida;
+                }
+
+                // Cantidad a descontar del stock, siempre en kilogramos.
+                var cantidadRequeridaEnStock = cantidadRequerida * factorAKg;
+
                 var unidadMedida = await _unidadMedidaRepository.FindByIdAsync(idUnidadMedida);
 
                 var hoy = DateTime.Now.Date;
+                // Los lotes por peso pueden tener CantidadDisponible == 0 y aun así conservar
+                // kilogramos disponibles, por eso el filtro depende del modo de inventario.
                 var lotesDisponibles = _lotesProductosRepository.GetByFilter(l =>
                     l.IdProducto == idProducto &&
                     l.Estado == 1 &&
-                    l.CantidadDisponible > 0 &&
+                    (operaPorPeso ? l.PesoDisponible > 0 : l.CantidadDisponible > 0) &&
                     l.FechaVencimiento >= hoy
                 ).OrderBy(l => l.FechaVencimiento).ToList();
 
-                if (pesoPorUnidad.HasValue)
+                if (operaPorPeso)
                 {
-                    if (esVentaPorPeso)
+                    var pesoTotal = lotesDisponibles.Sum(l => l.PesoDisponible);
+                    if (pesoTotal < cantidadRequeridaEnStock)
                     {
-                        var pesoTotal = lotesDisponibles.Sum(l => l.PesoDisponible);
-                        if (pesoTotal < cantidadRequerida)
-                        {
-                            throw new InvalidOperationException(
-                                $"Stock insuficiente de '{producto.Nombre}'. " +
-                                $"Requerido: {cantidadRequerida} kg, Disponible: {pesoTotal} kg");
-                        }
-                    }
-                    else
-                    {
-                        var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
-                        if (stockTotal < cantidadRequerida)
-                        {
-                            throw new InvalidOperationException(
-                                $"Stock insuficiente de '{producto.Nombre}'. " +
-                                $"Requerido: {cantidadRequerida} unidades, Disponible: {stockTotal} unidades");
-                        }
+                        throw new InvalidOperationException(
+                            $"Stock insuficiente de '{producto.Nombre}'. " +
+                            $"Requerido: {cantidadRequeridaEnStock} kg, Disponible: {pesoTotal} kg");
                     }
                 }
                 else
                 {
                     var stockTotal = lotesDisponibles.Sum(l => l.CantidadDisponible);
-                    if (stockTotal < cantidadRequerida)
+                    if (stockTotal < cantidadRequeridaEnStock)
                     {
                         throw new InvalidOperationException(
                             $"Stock insuficiente de '{producto.Nombre}'. " +
-                            $"Requerido: {cantidadRequerida}, Disponible: {stockTotal}");
+                            $"Requerido: {cantidadRequeridaEnStock} unidades, Disponible: {stockTotal} unidades");
                     }
                 }
 
                 var consumos = new List<ConsumoProductoDTO>();
-                decimal cantidadPendiente = cantidadRequerida;
+                decimal cantidadPendiente = cantidadRequeridaEnStock;
 
                 foreach (var lote in lotesDisponibles)
                 {
                     if (cantidadPendiente <= 0) break;
 
                     decimal cantidadAConsumir;
-                    decimal unidadesAConsumir = 0;
-                    decimal pesoAConsumir = 0;
-                    decimal pesoPorUnidadLote = lote.CantidadDisponible > 0
-                        ? lote.PesoDisponible / lote.CantidadDisponible
-                        : 0m;
+                    // Relación peso/unidad propia del lote (puede diferir de la nominal del producto).
+                    var ratioLote = ProductoStockRules.RatioLote(lote.CantidadDisponible, lote.PesoDisponible);
 
-                    if (pesoPorUnidad.HasValue && pesoPorUnidadLote <= 0)
-                    {
-                        throw new InvalidOperationException(
-                            $"El lote {lote.Id} del producto '{producto.Nombre}' tiene una relación peso/unidad inválida");
-                    }
-
-                    if (pesoPorUnidad.HasValue && esVentaPorPeso)
+                    if (operaPorPeso)
                     {
                         cantidadAConsumir = Math.Min(lote.PesoDisponible, cantidadPendiente);
-                        unidadesAConsumir = cantidadAConsumir / pesoPorUnidadLote;
-                        pesoAConsumir = cantidadAConsumir;
 
-                        lote.PesoDisponible -= pesoAConsumir;
-                        lote.CantidadDisponible -= unidadesAConsumir;
-                    }
-                    else if (pesoPorUnidad.HasValue && !esVentaPorPeso)
-                    {
-                        cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
-                        unidadesAConsumir = cantidadAConsumir;
-                        pesoAConsumir = cantidadAConsumir * pesoPorUnidadLote;
-
-                        lote.CantidadDisponible -= unidadesAConsumir;
-                        lote.PesoDisponible -= pesoAConsumir;
+                        lote.PesoDisponible -= cantidadAConsumir;
+                        if (ratioLote > 0)
+                        {
+                            lote.CantidadDisponible -= cantidadAConsumir / ratioLote;
+                        }
                     }
                     else
                     {
                         cantidadAConsumir = Math.Min(lote.CantidadDisponible, cantidadPendiente);
+
                         lote.CantidadDisponible -= cantidadAConsumir;
+                        if (ratioLote > 0)
+                        {
+                            lote.PesoDisponible -= cantidadAConsumir * ratioLote;
+                        }
                     }
 
                     await _lotesProductosRepository.UpdateAsync(lote);
 
-                    var costBasis = esVentaPorPeso
+                    var costBasis = operaPorPeso
                         ? lote.PrecioKilo
                         : lote.PrecioUnitario;
 
-                    if (esVentaPorPeso && lote.PrecioKilo <= 0)
+                    if (operaPorPeso && lote.PrecioKilo <= 0)
                     {
                         throw new InvalidOperationException(
                             $"El lote del producto '{producto.Nombre}' tiene PrecioKilo inválido ({lote.PrecioKilo}) para una venta por peso");
@@ -273,7 +292,8 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                         FechaMovimiento = DateTime.Now,
                         Cantidad = cantidadAConsumir,
                         TotalMovimiento = cantidadAConsumir * costBasis,
-                        IdUnidadMedida = idUnidadMedida,
+                        // La unidad se deriva del modo, no la elige el cliente.
+                        IdUnidadMedida = ProductoStockRules.UnidadMedidaId(operaPorPeso),
                         IdEntidad = idCliente == Guid.Empty ? null : idCliente,
                         IdUsuario = idUsuario,
                         Observacion = observacion,
@@ -287,7 +307,9 @@ namespace DistribuidoraLaVilla.Application.Services.Inventario
                         IdProducto = idProducto,
                         NombreProducto = producto.Nombre,
                         CantidadRequerida = cantidadRequerida,
-                        CantidadConsumida = cantidadAConsumir,
+                        // En el modo mixto una venta por unidad se descuenta en kg pero se informa
+                        // en unidades, para que la línea de factura siga siendo coherente.
+                        CantidadConsumida = factorAKg == 1m ? cantidadAConsumir : cantidadAConsumir / factorAKg,
                         UnidadMedida = unidadMedida?.Abreviatura,
                         IdMovimiento = movimiento.Id,
                         IdLote = lote.Id

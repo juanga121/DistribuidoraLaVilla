@@ -13,5 +13,11 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Reportes
         public decimal Cantidad { get; set; }
         public string Lote { get; set; } = string.Empty;
         public string? Observacion { get; set; }
+
+        /// <summary>Unit-of-measure id stored on the movement: 1 = kilogramo.</summary>
+        public int IdUnidadMedida { get; set; }
+
+        /// <summary>Unit of <see cref="Cantidad"/>: "kg" or "und.".</summary>
+        public string SimboloUnidad { get; set; } = "und.";
     }
 }

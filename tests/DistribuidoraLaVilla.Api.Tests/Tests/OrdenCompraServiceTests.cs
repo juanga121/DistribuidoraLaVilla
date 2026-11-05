@@ -140,12 +140,13 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                     new() { Id = 2, IdOrdenCompra = 10, IdProducto = 2, Cantidad = 3m, PrecioUnitario = 50m, Subtotal = 150m }
                 });
 
-            _productoRepo.Setup(r => r.FindByIdAsync(1)).ReturnsAsync(new ProductosEntity { Id = 1, Nombre = "Producto A", VentaPorPeso = false, Estado = 1 });
-            _productoRepo.Setup(r => r.FindByIdAsync(2)).ReturnsAsync(new ProductosEntity { Id = 2, Nombre = "Producto B", VentaPorPeso = true, PesoPorUnidad = 0.5m, PrecioPorKilo = 60m, Estado = 1 });
+            _productoRepo.Setup(r => r.FindByIdAsync(1)).ReturnsAsync(new ProductosEntity { Id = 1, Nombre = "Producto A", VentaPorPeso = false, ModoInventario = 1, Estado = 1 });
+            _productoRepo.Setup(r => r.FindByIdAsync(2)).ReturnsAsync(new ProductosEntity { Id = 2, Nombre = "Producto B", VentaPorPeso = true, ModoInventario = 2, PesoPorUnidad = 0.5m, PrecioPorKilo = 60m, Estado = 1 });
 
             _ordenRepo.Setup(r => r.FindByIdAsync(10)).ReturnsAsync(CreateOrden());
 
             _recepcionRepo.Setup(r => r.CreateAsync(It.IsAny<RecepcionCompraEntity>())).Returns(Task.CompletedTask);
+            _recepcionRepo.Setup(r => r.UpdateAsync(It.IsAny<RecepcionCompraEntity>())).Returns(Task.CompletedTask);
             _cxpRepo.Setup(r => r.CreateAsync(It.IsAny<CuentasPagarEntity>())).Returns(Task.CompletedTask);
             _lotesRepo.Setup(r => r.CreateAsync(It.IsAny<LotesProductosEntity>())).Returns(Task.CompletedTask);
             _movimientosRepo.Setup(r => r.CreateAsync(It.IsAny<MovimientosProductosEntity>())).Returns(Task.CompletedTask);
@@ -188,10 +189,12 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             recepcionCapturada.IdMarca.Should().Be(dto.IdMarca);
             // FormaPago no enviado => default Crédito (backward compat).
             recepcionCapturada.FormaPago.Should().Be((int)FormaPago.Credito);
+            // 5 unidades x 20 + 3 kg x 60
+            recepcionCapturada.MontoTotal.Should().Be(280m);
 
             cxpCapturada.Should().NotBeNull();
             cxpCapturada!.IdOrdenCompra.Should().Be(10);
-            cxpCapturada.MontoTotal.Should().Be(400m);
+            cxpCapturada.MontoTotal.Should().Be(280m);
 
             lotesCapturados.Should().HaveCount(2);
             lotesCapturados[0].IdUnidadMedida.Should().Be(2);
@@ -202,7 +205,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             movimientosCapturados.Should().HaveCount(2);
             ordenCapturada.Should().NotBeNull();
             ordenCapturada!.Estado.Should().Be((int)EstadoCompraEnum.Recibida);
-            ordenCapturada.Total.Should().Be(400m);
+            ordenCapturada.Total.Should().Be(280m);
             ordenCapturada.FechaRecepcion.Should().BeCloseTo(dto.FechaRecepcion, TimeSpan.FromSeconds(1));
 
             _uow.Verify(u => u.BeginTransactionAsync(default), Times.Once);
@@ -285,7 +288,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             egresoCapturado.Should().NotBeNull();
             egresoCapturado!.IdApertura.Should().Be(1);
             egresoCapturado.TipoMovimiento.Should().Be((int)TipoMovimientoCajaEnum.Egreso);
-            egresoCapturado.Monto.Should().Be(400m);
+            egresoCapturado.Monto.Should().Be(280m);
             cxpHuboLlamada.Should().BeFalse();
 
             _uow.Verify(u => u.CommitAsync(default), Times.Once);
@@ -333,7 +336,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             await _service.RegistrarRecepcionCompraAsync(10, dto, UsuarioId);
 
             cxpCapturada.Should().NotBeNull();
-            cxpCapturada!.MontoTotal.Should().Be(400m);
+            cxpCapturada!.MontoTotal.Should().Be(280m);
             egresoCapturado.Should().BeNull();
 
             _uow.Verify(u => u.CommitAsync(default), Times.Once);
@@ -353,6 +356,60 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                 .WithMessage("*Contado (1) o Crédito (2)*");
 
             _uow.Verify(u => u.BeginTransactionAsync(default), Times.Never);
+        }
+
+        [Fact]
+        public async Task RegistrarRecepcionCompraAsync_CuandoProductoEsPorPeso_DeberiaValorarPorKiloYLoteEnKilogramos()
+        {
+            SetupCommon();
+            _productoRepo.Setup(r => r.FindByIdAsync(1)).ReturnsAsync(new ProductosEntity
+            {
+                Id = 1,
+                Nombre = "Producto Peso",
+                VentaPorPeso = true,
+                ModoInventario = (int)ModoInventarioEnum.Peso,
+                PesoPorUnidad = null,
+                PrecioPorKilo = 60m,
+                Estado = 1
+            });
+
+            var dto = CreateDto();
+            dto.Detalles = new List<RegistrarRecepcionCompraDetalleDTO>
+            {
+                new()
+                {
+                    IdProducto = 1,
+                    FechaVencimientoLote = DateTime.Now.AddDays(45),
+                    CantidadUnidades = 0m,
+                    PesoTotal = 12.5m,
+                    IdUnidadMedida = 1,
+                    PrecioUnitario = 0m,
+                    PrecioKilo = 60m
+                }
+            };
+
+            CuentasPagarEntity? cxpCapturada = null;
+            LotesProductosEntity? loteCapturado = null;
+
+            _cxpRepo.Setup(r => r.CreateAsync(It.IsAny<CuentasPagarEntity>()))
+                .Callback<CuentasPagarEntity>(e => cxpCapturada = e)
+                .Returns(Task.CompletedTask);
+            _lotesRepo.Setup(r => r.CreateAsync(It.IsAny<LotesProductosEntity>()))
+                .Callback<LotesProductosEntity>(e => loteCapturado = e)
+                .Returns(Task.CompletedTask);
+
+            await _service.RegistrarRecepcionCompraAsync(10, dto, UsuarioId);
+
+            // 12.5 kg x 60 = 750. El kilogramo es el stock real del lote.
+            cxpCapturada.Should().NotBeNull();
+            cxpCapturada!.MontoTotal.Should().Be(750m);
+
+            loteCapturado.Should().NotBeNull();
+            loteCapturado!.PrecioTotal.Should().Be(750m);
+            loteCapturado.CantidadUnidades.Should().Be(0);
+            loteCapturado.CantidadDisponible.Should().Be(12.5m);
+            loteCapturado.PesoDisponible.Should().Be(12.5m);
+            loteCapturado.IdUnidadMedida.Should().Be(1);
         }
     }
 }

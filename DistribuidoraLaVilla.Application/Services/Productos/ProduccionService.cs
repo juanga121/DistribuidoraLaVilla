@@ -1,5 +1,6 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using DistribuidoraLaVilla.Application.Interfaces;
+using DistribuidoraLaVilla.Application.Services.Inventario;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators.Productos;
 using DistribuidoraLaVilla.Domain.DTOS.Productos;
@@ -125,8 +126,13 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 
                 // Valorizar el lote producido por su COSTO REAL de materia prima consumida,
                 // nunca por el precio de venta del producto.
-                var costoUnitarioReal = solicitud.CantidadProducir > 0
-                    ? costoRealTotal / solicitud.CantidadProducir
+                // La cantidad producida se expresa en la unidad del modo: kilogramos en los modos por
+                // peso, unidades en el modo por unidad. El costo real por unidad de esa misma unidad.
+                var operaPorPeso = ProductoStockRules.OperaPorPeso(producto);
+                var cantidadProducida = solicitud.CantidadProducir;
+
+                var costoUnitarioReal = cantidadProducida > 0
+                    ? costoRealTotal / cantidadProducida
                     : 0m;
 
                 var nuevoLoteProducto = new LotesProductosEntity
@@ -135,15 +141,17 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     IdProveedor = Guid.Empty,
                     FechaEntrada = DateTime.Now,
                     FechaVencimiento = DateTime.Now.AddMonths(6),
-                    CantidadUnidades = (int)solicitud.CantidadProducir,
-                    PesoTotal = solicitud.CantidadProducir,
-                    IdUnidadMedida = solicitud.IdUnidadMedida,
-                    PrecioUnitario = costoUnitarioReal,
-                    PrecioKilo = costoUnitarioReal,
+                    // En los modos por peso el stock real son los kilogramos: no se guarda conteo de piezas.
+                    CantidadUnidades = operaPorPeso ? 0 : (int)Math.Round(cantidadProducida, MidpointRounding.AwayFromZero),
+                    PesoTotal = operaPorPeso ? cantidadProducida : 0m,
+                    IdUnidadMedida = ProductoStockRules.UnidadMedidaId(operaPorPeso),
+                    PrecioUnitario = operaPorPeso ? 0m : costoUnitarioReal,
+                    PrecioKilo = operaPorPeso ? costoUnitarioReal : 0m,
                     PrecioTotal = costoRealTotal,
                     IdMarca = 1,
-                    CantidadInicial = solicitud.CantidadProducir,
-                    CantidadDisponible = solicitud.CantidadProducir,
+                    CantidadInicial = cantidadProducida,
+                    CantidadDisponible = cantidadProducida,
+                    PesoDisponible = operaPorPeso ? cantidadProducida : 0m,
                     Estado = 1
                 };
 
@@ -154,9 +162,9 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                     IdLoteProducto = nuevoLoteProducto.Id,
                     TipoMovimiento = (int)TipoMovimientoProducto.Entrada,
                     FechaMovimiento = DateTime.Now,
-                    Cantidad = solicitud.CantidadProducir,
+                    Cantidad = cantidadProducida,
                     TotalMovimiento = costoRealTotal,
-                    IdUnidadMedida = solicitud.IdUnidadMedida,
+                    IdUnidadMedida = ProductoStockRules.UnidadMedidaId(operaPorPeso),
                     IdCliente = null,
                     IdProveedor = null,
                     IdUsuario = solicitud.IdUsuario,
@@ -171,7 +179,8 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
                 orden.Estado = 2;
                 await _ordenRepository.UpdateAsync(orden);
 
-                var unidadMedidaProducto = await _unidadMedidaRepository.FindByIdAsync(solicitud.IdUnidadMedida);
+                var unidadMedidaProducto = await _unidadMedidaRepository.FindByIdAsync(
+                    ProductoStockRules.UnidadMedidaId(operaPorPeso));
 
                 await _unitOfWork.CommitAsync();
 

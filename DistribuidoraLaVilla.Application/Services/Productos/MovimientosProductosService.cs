@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DistribuidoraLaVilla.Application.Interfaces;
+using DistribuidoraLaVilla.Application.Services.Inventario;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using DistribuidoraLaVilla.Application.Validators.Productos;
 using DistribuidoraLaVilla.Domain.DTOS.Productos;
@@ -15,9 +16,6 @@ namespace DistribuidoraLaVilla.Application.Services.Productos
 {
     public class MovimientosProductosService
     {
-        /// <summary>Canonical unit-of-measure ids shared across the inventory flows.</summary>
-        private const int IdUnidadMedidaKilo = 1;
-
         private readonly IGenericRepository<MovimientosProductosEntity, int> _movimientosRepository;
         private readonly IGenericRepository<LotesProductosEntity, int> _lotesRepository;
         private readonly IGenericRepository<ProductosEntity, int> _productosRepository;
@@ -69,65 +67,47 @@ var lote = await _lotesRepository.FindByIdAsync(dto.IdLoteProducto);
 
             try
             {
-                // A product with a weight per unit is consumed in dual mode: InventarioService
-                // converts between units and weight on every sale, so the lot must always satisfy
-                // PesoDisponible == CantidadDisponible * PesoPorUnidad. Moving only one counter
-                // desyncs the lot and can strand stock, because lot selection filters on
-                // CantidadDisponible > 0.
+                // The lot's authoritative counter is expressed in the product's mode unit, so a movement
+                // simply adds to or subtracts from that single counter.
                 var producto = await _productosRepository.FindByIdAsync(lote.IdProducto)
                     ?? throw new InvalidOperationException(
                         $"No se encontró el producto con ID {lote.IdProducto} asociado al lote {lote.Id}");
 
-                var pesoPorUnidad = producto.PesoPorUnidad;
-                var tieneConversionPorPeso = pesoPorUnidad.HasValue && pesoPorUnidad.Value > 0;
-                var pesoPorUnidadLote = tieneConversionPorPeso && lote.CantidadDisponible > 0
-                    ? lote.PesoDisponible / lote.CantidadDisponible
-                    : 0m;
+                var operaPorPeso = ProductoStockRules.OperaPorPeso(producto);
 
-                // The movement is expressed either in kilos or in units. Both counters are derived
-                // from that single quantity so the invariant survives the movement.
-                var movimientoEnPeso = tieneConversionPorPeso && dto.IdUnidadMedida == IdUnidadMedidaKilo;
+                // The movement quantity is always expressed in the product's mode unit: kilograms for
+                // weight modes, units for unit mode. The client-supplied unit of measure is only a
+                // convenience and must agree with the mode; a mismatch is a caller bug, not a conversion.
+                var unidadEsperada = ProductoStockRules.UnidadMedidaId(operaPorPeso);
 
-                if (!tieneConversionPorPeso && dto.IdUnidadMedida == IdUnidadMedidaKilo)
+                if (dto.IdUnidadMedida > 0 && dto.IdUnidadMedida != unidadEsperada)
                 {
                     throw new InvalidOperationException(
-                        $"El producto '{producto.Nombre}' no tiene peso por unidad definido, " +
-                        "por lo que no admite movimientos expresados en kilos");
+                        $"El producto '{producto.Nombre}' administra su stock en " +
+                        $"{(operaPorPeso ? "kilogramos" : "unidades")}, por lo que el movimiento debe informarse en esa unidad");
                 }
-
-                if (tieneConversionPorPeso && pesoPorUnidadLote <= 0)
-                {
-                    throw new InvalidOperationException(
-                        $"El lote {lote.Id} del producto '{producto.Nombre}' tiene una relación peso/unidad inválida");
-                }
-
-                var cantidadEnUnidades = movimientoEnPeso
-                    ? dto.Cantidad / pesoPorUnidadLote
-                    : dto.Cantidad;
 
                 var stockAnterior = lote.CantidadDisponible;
                 var nuevoStock = CalcularNuevoStock(
                     stockAnterior,
-                    cantidadEnUnidades,
+                    dto.Cantidad,
                     (TipoMovimientoProducto)dto.TipoMovimiento
                 );
 
                 if (nuevoStock < 0)
                 {
                     throw new InvalidOperationException(
-                        $"Stock insuficiente. Disponible: {stockAnterior}, Requerido: {cantidadEnUnidades}. " +
+                        $"Stock insuficiente. Disponible: {stockAnterior}, Requerido: {dto.Cantidad}. " +
                         $"Faltante: {Math.Abs(nuevoStock)}"
                     );
                 }
 
-                // Weight mirrors units through the same ratio, so both counters stay consistent.
-                var nuevoPeso = tieneConversionPorPeso
-                    ? nuevoStock * pesoPorUnidadLote
-                    : nuevoStock;
+                // In weight modes the authoritative counter is already kilograms; in unit mode the lot
+                // does not track kilograms at all.
+                var nuevoPeso = operaPorPeso ? nuevoStock : 0m;
 
-                // Value the movement with the cost matching the unit it was expressed in,
-                // instead of always charging PrecioKilo.
-                var costoUnitario = movimientoEnPeso ? lote.PrecioKilo : lote.PrecioUnitario;
+                // Value the movement with the cost matching the unit the lot is measured in.
+                var costoUnitario = operaPorPeso ? lote.PrecioKilo : lote.PrecioUnitario;
                 var totalMovimiento = dto.Cantidad * costoUnitario;
 
                 var movimiento = new MovimientosProductosEntity
@@ -137,7 +117,7 @@ var lote = await _lotesRepository.FindByIdAsync(dto.IdLoteProducto);
                     FechaMovimiento = DateTime.Now,
                     Cantidad = dto.Cantidad,
                     TotalMovimiento = totalMovimiento,
-                    IdUnidadMedida = dto.IdUnidadMedida,
+                    IdUnidadMedida = unidadEsperada,
                     IdCliente = dto.IdCliente,
                     IdProveedor = dto.IdProveedor,
                     IdUsuario = dto.IdUsuario,

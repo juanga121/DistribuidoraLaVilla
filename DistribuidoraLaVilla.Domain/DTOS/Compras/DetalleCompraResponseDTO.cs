@@ -10,5 +10,6 @@ namespace DistribuidoraLaVilla.Domain.DTOS.Compras
         public decimal Subtotal { get; set; }
         public bool VentaPorPeso { get; set; }
         public decimal? PesoPorUnidad { get; set; }
+        public int ModoInventario { get; set; } = 1;
     }
 }

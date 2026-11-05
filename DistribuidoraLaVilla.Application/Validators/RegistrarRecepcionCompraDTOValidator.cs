@@ -54,24 +54,24 @@ namespace DistribuidoraLaVilla.Application.Validators
                     .WithMessage("Debe especificar un producto válido");
 
                 detalle.RuleFor(x => x.CantidadUnidades)
-                    .GreaterThan(0)
-                    .WithMessage("La cantidad de unidades debe ser mayor a 0");
+                    .GreaterThanOrEqualTo(0)
+                    .WithMessage("La cantidad de unidades no puede ser negativa");
 
                 detalle.RuleFor(x => x.PesoTotal)
-                    .GreaterThan(0)
-                    .WithMessage("El peso total debe ser mayor a 0");
+                    .GreaterThanOrEqualTo(0)
+                    .WithMessage("El peso total no puede ser negativo");
 
                 detalle.RuleFor(x => x.IdUnidadMedida)
                     .GreaterThan(0)
                     .WithMessage("Debe especificar una unidad de medida válida");
 
                 detalle.RuleFor(x => x.PrecioUnitario)
-                    .GreaterThan(0)
-                    .WithMessage("El costo unitario debe ser mayor a 0");
+                    .GreaterThanOrEqualTo(0)
+                    .WithMessage("El costo unitario no puede ser negativo");
 
                 detalle.RuleFor(x => x.PrecioKilo)
-                    .GreaterThan(0)
-                    .WithMessage("El costo por kilo debe ser mayor a 0");
+                    .GreaterThanOrEqualTo(0)
+                    .WithMessage("El costo por kilo no puede ser negativo");
             });
         }
     }

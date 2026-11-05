@@ -75,9 +75,9 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
         // ── Efectivo tests ──
 
         [Fact]
-        public async Task GetBalanceMinimo_EfectivoEquivalenteTotal_DeberiaSumarSaldoDeAperturas()
+        public async Task GetBalanceMinimo_EfectivoEquivalenteTotal_DeberiaUsarSoloLaCajaAbierta()
         {
-            // Arrange — 2 aperturas with known totals
+            // Arrange — una caja abierta y una cerrada: sumar ambas duplicaría el efectivo arrastrado
             _context.CajaAperturas.AddRange(
                 new CajaAperturaEntity
                 {
@@ -89,6 +89,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                 {
                     Id = 2, MontoInicial = 8000, TotalIngresos = 1000,
                     TotalEgresos = 500, Estado = 2, FechaApertura = DateTime.Now.AddDays(-1),
+                    FechaCierre = DateTime.Now.AddHours(-2), MontoFinal = 8500,
                     IdUsuario = Guid.NewGuid()
                 });
             await _context.SaveChangesAsync();
@@ -96,11 +97,39 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             // Act
             var result = await _service.GetBalanceMinimoAsync();
 
-            // Assert — Apertura 1: 10000+5000-2000=13000, Apertura 2: 8000+1000-500=8500
-            result.EfectivoEquivalenteTotal.Should().Be(21500m);
-            result.EfectivoItems.Should().HaveCount(2);
-            result.EfectivoItems.Should().Contain(e => e.Saldo == 13000m);
-            result.EfectivoItems.Should().Contain(e => e.Saldo == 8500m);
+            // Assert — solo la abierta: 10000 + 5000 - 2000 = 13000
+            result.EfectivoEquivalenteTotal.Should().Be(13000m);
+            result.EfectivoItems.Should().HaveCount(1);
+            result.EfectivoItems[0].Saldo.Should().Be(13000m);
+        }
+
+        [Fact]
+        public async Task GetBalanceMinimo_EfectivoEquivalenteTotal_SinCajaAbierta_DeberiaUsarElMontoFinalDeLaUltimaCerrada()
+        {
+            // Arrange — dos cajas cerradas con el efectivo arrastrado de una a la siguiente
+            _context.CajaAperturas.AddRange(
+                new CajaAperturaEntity
+                {
+                    Id = 1, MontoInicial = 10000, TotalIngresos = 5000, TotalEgresos = 2000,
+                    Estado = 2, FechaApertura = DateTime.Now.AddDays(-3),
+                    FechaCierre = DateTime.Now.AddDays(-2), MontoFinal = 12900,
+                    IdUsuario = Guid.NewGuid()
+                },
+                new CajaAperturaEntity
+                {
+                    Id = 2, MontoInicial = 12900, TotalIngresos = 1000, TotalEgresos = 500,
+                    Estado = 2, FechaApertura = DateTime.Now.AddDays(-1),
+                    FechaCierre = DateTime.Now.AddHours(-2), MontoFinal = 13350,
+                    IdUsuario = Guid.NewGuid()
+                });
+            await _context.SaveChangesAsync();
+
+            // Act
+            var result = await _service.GetBalanceMinimoAsync();
+
+            // Assert — el efectivo contado de la última cerrada, no la suma de las dos
+            result.EfectivoEquivalenteTotal.Should().Be(13350m);
+            result.EfectivoItems.Should().HaveCount(1);
         }
 
         [Fact]

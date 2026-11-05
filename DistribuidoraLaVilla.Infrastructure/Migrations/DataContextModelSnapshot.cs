@@ -1546,6 +1546,10 @@ namespace DistribuidoraLaVilla.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("id_categoria");
 
+                    b.Property<int>("ModoInventario")
+                        .HasColumnType("int")
+                        .HasColumnName("modo_inventario");
+
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -1563,6 +1567,10 @@ namespace DistribuidoraLaVilla.Infrastructure.Migrations
                     b.Property<decimal>("PrecioUnitario")
                         .HasColumnType("decimal(18,2)")
                         .HasColumnName("precio_unitario");
+
+                    b.Property<decimal?>("StockMinimo")
+                        .HasColumnType("decimal(18,4)")
+                        .HasColumnName("stock_minimo");
 
                     b.Property<bool>("VentaPorPeso")
                         .HasColumnType("bit")

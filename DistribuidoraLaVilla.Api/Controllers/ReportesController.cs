@@ -83,6 +83,26 @@ namespace DistribuidoraLaVilla.Api.Controllers
         }
 
         /// <summary>
+        /// GET /api/reportes/rentabilidad?desde=&amp;hasta=
+        /// Ingreso, costo real de la mercadería vendida y margen por producto en el período.
+        /// </summary>
+        [HttpGet("Rentabilidad")]
+        public async Task<ActionResult<RentabilidadReporteDTO>> GetRentabilidad(
+            [FromQuery] DateTime desde,
+            [FromQuery] DateTime hasta)
+        {
+            try
+            {
+                var resultado = await _reportesService.GetRentabilidadAsync(desde, hasta);
+                return Ok(resultado);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { mensaje = $"Error al obtener rentabilidad: {ex.Message}" });
+            }
+        }
+
+        /// <summary>
         /// GET /api/reportes/cxc-aging?idCliente=
         /// Reporte de antigüedad de cuentas por cobrar en 4 buckets.
         /// </summary>
@@ -108,17 +128,17 @@ namespace DistribuidoraLaVilla.Api.Controllers
         }
 
         /// <summary>
-        /// GET /api/reportes/inventario?idCategoria=&amp;stockThreshold=
-        /// Reporte de inventario con niveles de stock y alertas.
+        /// GET /api/reportes/inventario?idCategoria=
+        /// Reporte de inventario con niveles de stock y alertas. El umbral de stock bajo es el
+        /// mínimo de cada producto (o el default de su modo de inventario).
         /// </summary>
         [HttpGet("Inventario")]
         public async Task<ActionResult<InventarioReporteDTO>> GetInventario(
-            [FromQuery] int? idCategoria,
-            [FromQuery] int stockThreshold = 10)
+            [FromQuery] int? idCategoria)
         {
             try
             {
-                var resultado = await _reportesService.GetInventarioAsync(idCategoria, stockThreshold);
+                var resultado = await _reportesService.GetInventarioAsync(idCategoria);
                 return Ok(resultado);
             }
             catch (Exception ex)

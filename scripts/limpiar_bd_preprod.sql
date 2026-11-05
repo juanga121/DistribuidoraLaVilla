@@ -5,8 +5,10 @@
 --   - tipos_factura
 --   - TiposMovimientoMateriaPrima
 --   - unidad_medida
+--   - usuarios
 --
 -- It deletes all rows from every other user table, then reseeds identity columns.
+-- Usuarios se conserva a propósito: sin ellos no se puede iniciar sesión.
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
@@ -25,6 +27,7 @@ BEGIN TRY
         ('tipos_factura'),
         ('TiposMovimientoMateriaPrima'),
         ('unidad_medida'),
+        ('usuarios'),
         ('__EFMigrationsHistory');
 
     DECLARE @SchemaName sysname;

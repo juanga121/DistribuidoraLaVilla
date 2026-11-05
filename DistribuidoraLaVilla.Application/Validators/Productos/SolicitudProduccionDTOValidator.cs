@@ -15,9 +15,11 @@ namespace DistribuidoraLaVilla.Application.Validators.Productos
                 .GreaterThan(0)
                 .WithMessage("La cantidad a producir debe ser mayor a 0");
 
+            // La unidad de medida ya no la elige el cliente: se deriva del modo de inventario del
+            // producto. Se acepta el valor pero no se exige, para no romper clientes anteriores.
             RuleFor(x => x.IdUnidadMedida)
-                .GreaterThan(0)
-                .WithMessage("El ID de la unidad de medida debe ser mayor a 0");
+                .GreaterThanOrEqualTo(0)
+                .WithMessage("El ID de la unidad de medida no puede ser negativo");
 
             RuleFor(x => x.IdUsuario)
                 .NotEmpty()

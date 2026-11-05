@@ -1,4 +1,4 @@
-using DistribuidoraLaVilla.Application.Services.Productos;
+﻿using DistribuidoraLaVilla.Application.Services.Productos;
 using DistribuidoraLaVilla.Application.Validators;
 using DistribuidoraLaVilla.Application.Interfaces;
 using DistribuidoraLaVilla.Domain.DTOS;
@@ -41,7 +41,7 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
         }
 
         [Fact]
-        public async Task CrearLoteProducto_DebeUsarCantidadInicialComoCantidadDisponible()
+        public async Task CrearLoteProducto_ModoPeso_DebeGuardarElStockEnKilogramos()
         {
             var capturado = new LotesProductosEntity();
             _productosRepo.Setup(r => r.FindByIdAsync(1)).ReturnsAsync(new ProductosEntity
@@ -49,6 +49,8 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                 Id = 1,
                 Nombre = "Producto",
                 Estado = 1,
+                ModoInventario = 2,
+                VentaPorPeso = true,
                 PesoPorUnidad = 0.5m
             });
 
@@ -72,12 +74,62 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
 
             await _service.CrearLoteProductoAsync(dto);
 
-            capturado.CantidadInicial.Should().Be(capturado.CantidadDisponible);
+            // En un modo por peso el contador autoritativo es el kilogramo, no la cantidad de piezas.
+            capturado.CantidadUnidades.Should().Be(8);
+            capturado.CantidadInicial.Should().Be(4m);
+            capturado.CantidadDisponible.Should().Be(4m);
             capturado.PesoDisponible.Should().Be(4m);
+            capturado.PrecioTotal.Should().Be(80m);
+            capturado.PrecioKilo.Should().Be(20m);
+            capturado.PrecioUnitario.Should().Be(0m);
+            capturado.IdUnidadMedida.Should().Be(1);
         }
 
         [Fact]
-        public async Task ActualizarLoteProducto_NoDebeReemplazarFechaEntradaNiCantidadInicial()
+        public async Task CrearLoteProducto_ModoUnidad_DebeGuardarElStockEnUnidades()
+        {
+            var capturado = new LotesProductosEntity();
+            _productosRepo.Setup(r => r.FindByIdAsync(1)).ReturnsAsync(new ProductosEntity
+            {
+                Id = 1,
+                Nombre = "Producto",
+                Estado = 1,
+                ModoInventario = 1,
+                VentaPorPeso = false
+            });
+
+            _lotesRepo.Setup(r => r.CreateAsync(It.IsAny<LotesProductosEntity>()))
+                .Callback<LotesProductosEntity>(e => capturado = e)
+                .Returns(Task.CompletedTask);
+
+            var dto = new LotesProductosDTO
+            {
+                IdProducto = 1,
+                IdProveedor = Guid.NewGuid(),
+                FechaVencimiento = DateTime.Today.AddDays(10),
+                CantidadUnidades = 10,
+                PesoTotal = 0m,
+                IdUnidadMedida = 2,
+                PrecioUnitario = 15m,
+                PrecioKilo = 0m,
+                IdMarca = 1,
+                IdUsuario = Guid.NewGuid()
+            };
+
+            await _service.CrearLoteProductoAsync(dto);
+
+            // Regression: el stock de un producto por unidad no puede salir del campo peso.
+            capturado.CantidadInicial.Should().Be(10m);
+            capturado.CantidadDisponible.Should().Be(10m);
+            capturado.PesoDisponible.Should().Be(0m);
+            capturado.PrecioTotal.Should().Be(150m);
+            capturado.PrecioUnitario.Should().Be(15m);
+            capturado.PrecioKilo.Should().Be(0m);
+            capturado.IdUnidadMedida.Should().Be(2);
+        }
+
+        [Fact]
+        public async Task ActualizarLoteProducto_NoDebeReemplazarFechaEntrada()
         {
             var fechaEntradaOriginal = new DateTime(2026, 1, 10);
             var lote = new LotesProductosEntity
@@ -125,13 +177,77 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
 
             capturado.Should().NotBeNull();
             capturado!.FechaEntrada.Should().Be(fechaEntradaOriginal);
-            capturado.CantidadInicial.Should().Be(10m);
             capturado.FechaVencimiento.Should().Be(dto.FechaVencimiento);
+            // El total del lote pasa a ser el informado; nada se consumió, así que todo queda disponible.
+            capturado.CantidadInicial.Should().Be(12m);
+            capturado.CantidadDisponible.Should().Be(12m);
         }
 
         [Fact]
-        public async Task ActualizarLoteProducto_DebeAjustarDisponiblesPorDiferenciaRealDelLote()
+        public async Task ActualizarLoteProducto_ModoUnidad_DebePreservarLoConsumido()
         {
+            var lote = new LotesProductosEntity
+            {
+                Id = 16,
+                IdProducto = 1,
+                IdProveedor = Guid.NewGuid(),
+                FechaEntrada = new DateTime(2026, 1, 10),
+                FechaVencimiento = new DateTime(2026, 2, 10),
+                CantidadUnidades = 10,
+                PesoTotal = 0m,
+                IdUnidadMedida = 2,
+                PrecioUnitario = 12m,
+                PrecioKilo = 0m,
+                PrecioTotal = 120m,
+                IdMarca = 1,
+                CantidadInicial = 10m,
+                CantidadDisponible = 8m,
+                PesoDisponible = 0m,
+                Estado = 1
+            };
+
+            LotesProductosEntity? capturado = null;
+
+            _lotesRepo.Setup(r => r.FindByIdAsync(16)).ReturnsAsync(lote);
+            _lotesRepo.Setup(r => r.UpdateAsync(It.IsAny<LotesProductosEntity>()))
+                .Callback<LotesProductosEntity>(e => capturado = e)
+                .Returns(Task.CompletedTask);
+
+            var dto = new LotesProductosDTO
+            {
+                IdProducto = 1,
+                IdProveedor = lote.IdProveedor,
+                FechaVencimiento = new DateTime(2026, 3, 10),
+                CantidadUnidades = 12,
+                PesoTotal = 0m,
+                IdUnidadMedida = 2,
+                PrecioUnitario = 15m,
+                PrecioKilo = 0m,
+                IdMarca = 1,
+                IdUsuario = Guid.NewGuid()
+            };
+
+            await _service.ActualizarLoteProducto(16, dto);
+
+            capturado.Should().NotBeNull();
+            // Se consumieron 2 unidades (10 - 8): el nuevo total deja 10 disponibles.
+            capturado!.CantidadInicial.Should().Be(12m);
+            capturado.CantidadDisponible.Should().Be(10m);
+            capturado.PesoDisponible.Should().Be(0m);
+        }
+
+        [Fact]
+        public async Task ActualizarLoteProducto_ModoPeso_DebeAjustarKilogramosYNoUnidades()
+        {
+            _productosRepo.Setup(r => r.FindByIdAsync(1)).ReturnsAsync(new ProductosEntity
+            {
+                Id = 1,
+                Nombre = "Producto",
+                Estado = 1,
+                ModoInventario = 2,
+                VentaPorPeso = true
+            });
+
             var lote = new LotesProductosEntity
             {
                 Id = 15,
@@ -139,15 +255,15 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                 IdProveedor = Guid.NewGuid(),
                 FechaEntrada = new DateTime(2026, 1, 10),
                 FechaVencimiento = new DateTime(2026, 2, 10),
-                CantidadUnidades = 1000,
+                CantidadUnidades = 0,
                 PesoTotal = 10000m,
                 IdUnidadMedida = 1,
-                PrecioUnitario = 12m,
+                PrecioUnitario = 0m,
                 PrecioKilo = 12m,
-                PrecioTotal = 12000m,
+                PrecioTotal = 120000m,
                 IdMarca = 1,
-                CantidadInicial = 1000m,
-                CantidadDisponible = 800m,
+                CantidadInicial = 10000m,
+                CantidadDisponible = 8000m,
                 PesoDisponible = 8000m,
                 Estado = 1
             };
@@ -164,10 +280,10 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
                 IdProducto = 1,
                 IdProveedor = lote.IdProveedor,
                 FechaVencimiento = new DateTime(2026, 3, 10),
-                CantidadUnidades = 1200,
+                CantidadUnidades = 0,
                 PesoTotal = 12000m,
                 IdUnidadMedida = 1,
-                PrecioUnitario = 15m,
+                PrecioUnitario = 0m,
                 PrecioKilo = 15m,
                 IdMarca = 1,
                 IdUsuario = Guid.NewGuid()
@@ -176,8 +292,12 @@ namespace DistribuidoraLaVilla.Api.Tests.Tests
             await _service.ActualizarLoteProducto(15, dto);
 
             capturado.Should().NotBeNull();
-            capturado!.CantidadDisponible.Should().Be(1000m);
+            // 2000 kg ya consumidos sobre 10000: el nuevo total de 12000 deja 10000 kg disponibles,
+            // y el contador de unidades no participa de la cuenta.
+            capturado!.CantidadInicial.Should().Be(12000m);
+            capturado.CantidadDisponible.Should().Be(10000m);
             capturado.PesoDisponible.Should().Be(10000m);
+            capturado.PrecioTotal.Should().Be(180000m);
         }
 
         [Fact]

@@ -7,21 +7,24 @@ namespace DistribuidoraLaVilla.Application.Validators
     {
         public LotesProductosDTOValidator(bool validarFechaVencimientoFutura = true)
         {
+            // The four quantity/price fields are validated per product inventory mode in
+            // LotesProductosService, because the validator has no access to the product. Here we only
+            // reject negative values.
             RuleFor(x => x.CantidadUnidades)
-                .GreaterThan(0)
-                .WithMessage("La cantidad de unidades debe ser mayor a 0");
+                .GreaterThanOrEqualTo(0)
+                .WithMessage("La cantidad de unidades no puede ser negativa");
 
             RuleFor(x => x.PesoTotal)
-                .GreaterThan(0)
-                .WithMessage("El peso total debe ser mayor a 0");
+                .GreaterThanOrEqualTo(0)
+                .WithMessage("El peso total no puede ser negativo");
 
             RuleFor(x => x.PrecioUnitario)
-                .GreaterThan(0)
-                .WithMessage("El costo unitario debe ser mayor a 0");
+                .GreaterThanOrEqualTo(0)
+                .WithMessage("El costo unitario no puede ser negativo");
 
             RuleFor(x => x.PrecioKilo)
-                .GreaterThan(0)
-                .WithMessage("El costo por kilo debe ser mayor a 0");
+                .GreaterThanOrEqualTo(0)
+                .WithMessage("El costo por kilo no puede ser negativo");
 
             RuleFor(x => x.IdProducto)
                 .GreaterThan(0)

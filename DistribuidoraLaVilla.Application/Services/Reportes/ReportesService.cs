@@ -1,9 +1,11 @@
-using DistribuidoraLaVilla.Application.Interfaces;
+﻿using DistribuidoraLaVilla.Application.Interfaces;
+using DistribuidoraLaVilla.Application.Services.Inventario;
 using DistribuidoraLaVilla.Domain.DTOS.Reportes;
 using DistribuidoraLaVilla.Domain.Entities;
 using DistribuidoraLaVilla.Domain.Entities.Caja;
 using DistribuidoraLaVilla.Domain.Entities.Facturacion;
 using DistribuidoraLaVilla.Domain.Entities.Productos;
+using DistribuidoraLaVilla.Domain.Enums;
 using DistribuidoraLaVilla.Domain.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -124,13 +126,15 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                     d => d.IdProducto,
                     p => (int?)p.Id,
                     (d, p) => new { d, p })
-                .GroupBy(x => new { x.p.Id, x.p.Nombre })
+                .GroupBy(x => new { x.p.Id, x.p.Nombre, x.p.ModoInventario })
                 .Select(g => new TopProductoDTO
                 {
                     IdProducto = g.Key.Id,
                     NombreProducto = g.Key.Nombre ?? string.Empty,
                     TotalVendido = g.Sum(x => x.d.Subtotal ?? 0),
-                    CantidadVendida = (int)(g.Sum(x => x.d.Cantidad ?? 0))
+                    CantidadVendida = g.Sum(x => x.d.Cantidad ?? 0),
+                    ModoInventario = g.Key.ModoInventario,
+                    SimboloUnidad = g.Key.ModoInventario == 2 || g.Key.ModoInventario == 3 || g.Key.ModoInventario == 4 ? "kg" : "und."
                 })
                 .OrderByDescending(x => x.TotalVendido)
                 .Take(10)
@@ -158,27 +162,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                 })
                 .FirstOrDefaultAsync() ?? new CxcResumenDTO();
 
-            var stockBajo = await _loteRepo.GetQueryable()
-                .Where(l => l.Estado == 1)
-                .GroupBy(l => new { l.IdProducto })
-                .Select(g => new
-                {
-                    IdProducto = g.Key.IdProducto,
-                    StockActual = g.Sum(l => l.CantidadDisponible)
-                })
-                .Where(g => g.StockActual < 10)
-                .Join(productosQuery,
-                    s => s.IdProducto,
-                    p => p.Id,
-                    (s, p) => new StockBajoDTO
-                    {
-                        IdProducto = s.IdProducto,
-                        NombreProducto = p.Nombre ?? string.Empty,
-                        StockActual = s.StockActual,
-                        StockMinimo = 10
-                    })
-                .OrderBy(s => s.NombreProducto)
-                .ToListAsync();
+            var stockBajo = await CalcularStockBajoAsync();
 
             var ultimasFacturas = await facturasQuery
                 .Where(f => f.Fecha.HasValue)
@@ -310,8 +294,10 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                         IdProducto = p.Id,
                         NombreProducto = p.Nombre ?? string.Empty,
                         CantidadDisponible = l.CantidadDisponible,
-                        ValorUnitario = p.VentaPorPeso ? l.PrecioKilo : l.PrecioUnitario,
-                        ValorTotal = l.CantidadDisponible * (p.VentaPorPeso ? l.PrecioKilo : l.PrecioUnitario)
+                        ValorUnitario = p.ModoInventario == 2 || p.ModoInventario == 3 || p.ModoInventario == 4 ? l.PrecioKilo : l.PrecioUnitario,
+                        ValorTotal = l.CantidadDisponible * (p.ModoInventario == 2 || p.ModoInventario == 3 || p.ModoInventario == 4 ? l.PrecioKilo : l.PrecioUnitario),
+                        ModoInventario = p.ModoInventario,
+                        SimboloUnidad = p.ModoInventario == 2 || p.ModoInventario == 3 || p.ModoInventario == 4 ? "kg" : "und."
                     })
                 .OrderBy(p => p.NombreProducto)
                 .ToListAsync();
@@ -353,26 +339,41 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             var efectivoItems = new List<BalanceEfectivoItemDTO>();
             decimal efectivoTotal = 0;
 
-            foreach (var apertura in aperturas)
-            {
-                decimal totalIngresos = apertura.TotalIngresos ?? 0;
-                decimal totalEgresos = apertura.TotalEgresos ?? 0;
+            // El efectivo disponible es el de la caja abierta. Si no hay ninguna abierta se toma el
+            // monto final contado de la última caja cerrada. Sumar todas las aperturas duplicaría el
+            // dinero que se arrastra de una caja a la siguiente.
+            var cajaVigente = aperturas
+                .Where(a => a.Estado == (int)EstadoCajaEnum.Abierta)
+                .OrderByDescending(a => a.FechaApertura)
+                .FirstOrDefault()
+                ?? aperturas
+                    .Where(a => a.Estado == (int)EstadoCajaEnum.Cerrada)
+                    .OrderByDescending(a => a.FechaCierre ?? a.FechaApertura)
+                    .FirstOrDefault();
 
-                if (!apertura.TotalIngresos.HasValue || !apertura.TotalEgresos.HasValue)
+            if (cajaVigente != null)
+            {
+                decimal totalIngresos = cajaVigente.TotalIngresos ?? 0;
+                decimal totalEgresos = cajaVigente.TotalEgresos ?? 0;
+
+                if (!cajaVigente.TotalIngresos.HasValue || !cajaVigente.TotalEgresos.HasValue)
                 {
-                    var movimientos = _cajaMovimientoRepo.GetByFilter(m => m.IdApertura == apertura.Id);
+                    var movimientos = _cajaMovimientoRepo.GetByFilter(m => m.IdApertura == cajaVigente.Id);
                     totalIngresos = movimientos.Where(m => m.TipoMovimiento == 1).Sum(m => m.Monto);
                     totalEgresos = movimientos.Where(m => m.TipoMovimiento == 2).Sum(m => m.Monto);
                 }
 
-                decimal saldo = apertura.MontoInicial + totalIngresos - totalEgresos;
-                efectivoTotal += saldo;
+                // En una caja cerrada el monto final es el efectivo realmente contado.
+                decimal saldo = cajaVigente.MontoFinal
+                    ?? (cajaVigente.MontoInicial + totalIngresos - totalEgresos);
+
+                efectivoTotal = saldo;
 
                 efectivoItems.Add(new BalanceEfectivoItemDTO
                 {
-                    IdApertura = apertura.Id,
-                    FechaApertura = apertura.FechaApertura,
-                    MontoInicial = apertura.MontoInicial,
+                    IdApertura = cajaVigente.Id,
+                    FechaApertura = cajaVigente.FechaApertura,
+                    MontoInicial = cajaVigente.MontoInicial,
                     TotalIngresos = totalIngresos,
                     TotalEgresos = totalEgresos,
                     Saldo = saldo
@@ -571,7 +572,156 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
         }
 
 
-        public async Task<InventarioReporteDTO> GetInventarioAsync(int? idCategoria, int stockThreshold = 10)
+        /// <summary>
+        /// Products whose available stock is below their own minimum. The minimum is the product's
+        /// <c>StockMinimo</c> when defined, otherwise the default for its inventory mode
+        /// (10 units or 20 kg). Stock is the sum of the available quantity of every active lot.
+        /// </summary>
+        private async Task<List<StockBajoDTO>> CalcularStockBajoAsync()
+        {
+            var productos = await _productoRepo.GetQueryable()
+                .Where(p => p.Estado == 1)
+                .Select(p => new { p.Id, p.Nombre, p.ModoInventario, p.StockMinimo })
+                .ToListAsync();
+
+            var stock = await _loteRepo.GetQueryable()
+                .Where(l => l.Estado == 1)
+                .GroupBy(l => l.IdProducto)
+                .Select(g => new { IdProducto = g.Key, StockActual = g.Sum(l => l.CantidadDisponible) })
+                .ToListAsync();
+
+            var stockDict = stock.ToDictionary(s => s.IdProducto, s => s.StockActual);
+
+            return productos
+                .Select(p => new
+                {
+                    p.Nombre,
+                    p.ModoInventario,
+                    StockActual = stockDict.GetValueOrDefault(p.Id, 0m),
+                    StockMinimo = ProductoStockRules.ResolverStockMinimo(p.ModoInventario, p.StockMinimo),
+                    p.Id
+                })
+                .Where(x => x.StockActual < x.StockMinimo)
+                .Select(x => new StockBajoDTO
+                {
+                    IdProducto = x.Id,
+                    NombreProducto = x.Nombre ?? string.Empty,
+                    StockActual = x.StockActual,
+                    StockMinimo = x.StockMinimo,
+                    ModoInventario = x.ModoInventario,
+                    SimboloUnidad = x.ModoInventario == 2 || x.ModoInventario == 3 || x.ModoInventario == 4 ? "kg" : "und."
+                })
+                .OrderBy(x => x.NombreProducto)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Rentabilidad por producto en un período: ingreso de la venta contra el costo real del
+        /// lote vendido (kg x costo/kg, o unidades x costo/unidad).
+        /// </summary>
+        public async Task<RentabilidadReporteDTO> GetRentabilidadAsync(DateTime desde, DateTime hasta)
+        {
+            var desdeFecha = desde.Date;
+            var hastaFecha = hasta.Date.AddDays(1);
+
+            var filas = await _detalleRepo.GetQueryable()
+                .Join(_facturaRepo.GetQueryable()
+                        .Where(f => f.Estado == 1 && f.Fecha.HasValue
+                            && f.Fecha.Value >= desdeFecha && f.Fecha.Value < hastaFecha),
+                    d => d.IdFactura,
+                    f => (int?)f.Id,
+                    (d, f) => new
+                    {
+                        d.IdProducto,
+                        d.IdLote,
+                        d.Cantidad,
+                        d.Subtotal,
+                        d.PesoTotal,
+                        d.IdUnidadMedida
+                    })
+                .ToListAsync();
+
+            if (filas.Count == 0)
+            {
+                return new RentabilidadReporteDTO { Desde = desdeFecha, Hasta = hastaFecha.AddDays(-1) };
+            }
+
+            var loteIds = filas.Where(f => f.IdLote.HasValue).Select(f => f.IdLote!.Value).Distinct().ToList();
+            var lotes = await _loteRepo.GetQueryable()
+                .Where(l => loteIds.Contains(l.Id))
+                .Select(l => new { l.Id, l.PrecioKilo, l.PrecioUnitario })
+                .ToListAsync();
+            var loteDict = lotes.ToDictionary(l => l.Id);
+
+            var productoIds = filas.Where(f => f.IdProducto.HasValue).Select(f => f.IdProducto!.Value).Distinct().ToList();
+            var productos = await _productoRepo.GetQueryable()
+                .Where(p => productoIds.Contains(p.Id))
+                .Select(p => new { p.Id, p.Nombre, p.ModoInventario })
+                .ToListAsync();
+            var prodDict = productos.ToDictionary(p => p.Id);
+
+            var porProducto = filas
+                .GroupBy(f => f.IdProducto ?? 0)
+                .Select(g =>
+                {
+                    var costo = g.Sum(f =>
+                    {
+                        if (!f.IdLote.HasValue || !loteDict.TryGetValue(f.IdLote.Value, out var lote))
+                        {
+                            return 0m;
+                        }
+
+                        return f.PesoTotal.HasValue
+                            ? f.PesoTotal.Value * lote.PrecioKilo
+                            : (f.Cantidad ?? 0m) * lote.PrecioUnitario;
+                    });
+
+                    var ingreso = g.Sum(f => f.Subtotal ?? 0m);
+                    var unidades = g.Where(f => f.IdUnidadMedida == 2).Sum(f => f.Cantidad ?? 0m);
+                    var kg = g.Sum(f => f.PesoTotal ?? (f.IdUnidadMedida == 1 ? (f.Cantidad ?? 0m) : 0m));
+                    var modo = prodDict.TryGetValue(g.Key, out var prod) ? prod.ModoInventario : 1;
+
+                    return new RentabilidadProductoDTO
+                    {
+                        IdProducto = g.Key,
+                        NombreProducto = prodDict.TryGetValue(g.Key, out var p)
+                            ? (p.Nombre ?? string.Empty)
+                            : $"Producto {g.Key}",
+                        ModoInventario = modo,
+                        SimboloUnidad = modo == 1 ? "und." : "kg",
+                        UnidadesVendidas = unidades,
+                        KgVendidos = kg,
+                        Ingreso = ingreso,
+                        Costo = costo,
+                        Margen = ingreso - costo,
+                        MargenPorcentaje = ingreso > 0
+                            ? Math.Round((ingreso - costo) / ingreso * 100m, 2)
+                            : 0m,
+                        VendeBajoCosto = ingreso - costo < 0
+                    };
+                })
+                .OrderByDescending(x => x.Margen)
+                .ToList();
+
+            var totalIngreso = porProducto.Sum(x => x.Ingreso);
+            var margenTotal = porProducto.Sum(x => x.Margen);
+
+            return new RentabilidadReporteDTO
+            {
+                Desde = desdeFecha,
+                Hasta = hastaFecha.AddDays(-1),
+                Productos = porProducto,
+                TotalIngreso = totalIngreso,
+                TotalCosto = porProducto.Sum(x => x.Costo),
+                MargenTotal = margenTotal,
+                MargenPorcentaje = totalIngreso > 0
+                    ? Math.Round(margenTotal / totalIngreso * 100m, 2)
+                    : 0m,
+                ProductosBajoCosto = porProducto.Count(x => x.VendeBajoCosto)
+            };
+        }
+
+        public async Task<InventarioReporteDTO> GetInventarioAsync(int? idCategoria)
         {
             var now = DateTime.Now;
 
@@ -606,15 +756,26 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                         IdCategoria = p.IdCategoria,
                         Categoria = c.Nombre ?? string.Empty,
                         StockActual = 0,
-                        StockBajo = false
+                        StockBajo = false,
+                        ModoInventario = p.ModoInventario,
+                        SimboloUnidad = p.ModoInventario == 2 || p.ModoInventario == 3 || p.ModoInventario == 4 ? "kg" : "und."
                     })
                 .OrderBy(p => p.NombreProducto)
                 .ToListAsync();
 
+            // El mínimo se resuelve por producto (con el default de su modo), no con un número único.
+            var minimos = await productosQuery
+                .Select(p => new { p.Id, p.ModoInventario, p.StockMinimo })
+                .ToListAsync();
+            var minimoDict = minimos.ToDictionary(
+                m => m.Id,
+                m => ProductoStockRules.ResolverStockMinimo(m.ModoInventario, m.StockMinimo));
+
             foreach (var prod in productos)
             {
                 prod.StockActual = stockDict.GetValueOrDefault(prod.IdProducto, 0);
-                prod.StockBajo = prod.StockActual < stockThreshold;
+                prod.StockMinimo = minimoDict.GetValueOrDefault(prod.IdProducto, 0m);
+                prod.StockBajo = prod.StockActual < prod.StockMinimo;
             }
 
             var lotesProximos = await _loteRepo.GetQueryable()
@@ -629,7 +790,9 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                         IdLote = l.Id,
                         Producto = p.Nombre ?? string.Empty,
                         Cantidad = l.CantidadDisponible,
-                        FechaVencimiento = l.FechaVencimiento
+                        FechaVencimiento = l.FechaVencimiento,
+                        ModoInventario = p.ModoInventario,
+                        SimboloUnidad = p.ModoInventario == 2 || p.ModoInventario == 3 || p.ModoInventario == 4 ? "kg" : "und."
                     })
                 .OrderBy(l => l.FechaVencimiento)
                 .ToListAsync();
@@ -716,6 +879,7 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                     m.TipoMovimiento,
                     m.Cantidad,
                     m.IdLoteProducto,
+                    m.IdUnidadMedida,
                     m.Observacion
                 })
                 .ToListAsync();
@@ -767,7 +931,9 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
                     Tipo = tipoNombre,
                     Cantidad = m.Cantidad,
                     Lote = m.IdLoteProducto?.ToString() ?? string.Empty,
-                    Observacion = m.Observacion
+                    Observacion = m.Observacion,
+                    IdUnidadMedida = m.IdUnidadMedida,
+                    SimboloUnidad = m.IdUnidadMedida == 1 ? "kg" : "und."
                 };
             }).ToList();
 
@@ -829,12 +995,11 @@ namespace DistribuidoraLaVilla.Application.Services.Reportes
             if (cxcVencidas.Count > 0)
                 alertas.Add($"{cxcVencidas.Count} cuenta(s) por cobrar vencidas");
 
-            var stockBajo = await _loteRepo.GetQueryable()
-                .Where(l => l.CantidadDisponible <= 5 && l.Estado == 1)
-                .CountAsync();
+            // Mismo criterio que el dashboard y el reporte de inventario: producto contra su mínimo.
+            var stockBajo = await CalcularStockBajoAsync();
 
-            if (stockBajo > 0)
-                alertas.Add($"{stockBajo} lote(s) de productos con stock bajo");
+            if (stockBajo.Count > 0)
+                alertas.Add($"{stockBajo.Count} producto(s) con stock bajo");
 
             return new MovimientosDiariosDTO
             {
